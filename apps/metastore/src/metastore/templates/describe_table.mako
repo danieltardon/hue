@@ -14,11 +14,12 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 <%!
+from django.utils.html import escape
+
 from desktop.lib.i18n import smart_unicode
 from desktop.views import commonheader, commonfooter
 from django.utils.translation import ugettext as _
 %>
-
 <%namespace name="components" file="components.mako" />
 
 <%
@@ -27,7 +28,9 @@ from django.utils.translation import ugettext as _
   else:
     view_or_table_noun = _("Table")
 %>
+
 ${ commonheader(_("%s : %s") % (view_or_table_noun, table.name), app_name, user) | n,unicode }
+<link rel="stylesheet" href="/metastore/static/css/metastore.css" type="text/css">
 ${ components.menubar() }
 
 <%def name="column_table(cols)">
@@ -48,7 +51,7 @@ ${ components.menubar() }
             <a href="javascript:void(0)" data-row-selector="true" class="column-selector">${ column.name }</a>
           </td>
           <td>${ column.type }</td>
-          <td>${ column.comment != 'None' and column.comment or "" }</td>
+          <td>${ column.comment != 'None' and smart_unicode(column.comment) or "" }</td>
         </tr>
       % endfor
     </tbody>
@@ -81,7 +84,7 @@ ${ components.menubar() }
         <div class="card-body">
           <p>
             % if table.comment:
-            <div class="alert alert-info">${ _('Comment:') } ${ table.comment }</div>
+            <div class="alert alert-info">${ _('Comment:') } ${ smart_unicode(table.comment) }</div>
             % endif
 
             <ul class="nav nav-tabs">
@@ -130,7 +133,7 @@ ${ components.menubar() }
                         % if item is None:
                           NULL
                         % else:
-                          ${ smart_unicode(item, errors='ignore') }
+                          ${ escape(smart_unicode(item, errors='ignore')).replace(' ', '&nbsp;') | n,unicode }
                         % endif
                       </td>
                     % endfor
@@ -153,8 +156,8 @@ ${ components.menubar() }
                   <tbody>
                     % for name, value in table.properties:
                       <tr>
-                        <td>${ name }</td>
-                        <td>${ value }</td>
+                        <td>${ smart_unicode(name) }</td>
+                        <td>${ smart_unicode(value) }</td>
                       </tr>
                      % endfor
                   </tbody>
@@ -193,14 +196,6 @@ ${ components.menubar() }
 
 <div id="import-data-modal" class="modal hide fade"></div>
 </div>
-
-<style type="text/css">
-  .sampleTable td, .sampleTable th {
-    white-space: nowrap;
-  }
-</style>
-
-<link rel="stylesheet" href="/metastore/static/css/metastore.css" type="text/css">
 
 <script type="text/javascript" charset="utf-8">
   $(document).ready(function () {
@@ -265,6 +260,9 @@ ${ components.menubar() }
         }
       );
     });
+
+    // convert link text to URLs in comment column (Columns tab)
+    hue.text2Url(document.querySelectorAll('.datatables td:last-child'));
   });
 </script>
 

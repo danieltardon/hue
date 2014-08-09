@@ -156,6 +156,9 @@ function fixTemplateDotsAndFunctionNames(template) {
         _mustacheTmpl = _mustacheTmpl.replace(tag, tag.replace(/\./gi, "_"))
       }
     });
+    _mustacheTmpl = _mustacheTmpl.replace(/\{\{(.+?)\}\}/g, "{{{$1}}}");
+    _mustacheTmpl = _mustacheTmpl.replace(/\{\{\{\#hue_fn(.+?)\}\}\}/g, "{{#hue_fn$1}}")
+    _mustacheTmpl = _mustacheTmpl.replace(/\{\{\{\/hue_fn(.+?)\}\}\}/g, "{{/hue_fn$1}}")
   }
   return _mustacheTmpl;
 }

@@ -44,7 +44,7 @@ ${ layout.menubar(section='workflows') }
         <li><a href="#properties"><i class="fa fa-cog"></i> ${ _('Properties') }</a></li>
         % if user_can_edit_job:
           <li>
-            <a data-bind="attr: {href: '/filebrowser/view' + deployment_dir() }" target="_blank" title="${ _('Go upload additional files and libraries to the deployment directory on HDFS') }" rel="tooltip" data-placement="right"><i class="fa fa-folder-open"></i> ${ _('Workspace') }</a>
+            <a data-bind="attr: {href: '/filebrowser/view' + fixLeadingSlash(deployment_dir()) }" target="_blank" title="${ _('Go upload additional files and libraries to the deployment directory on HDFS') }" rel="tooltip" data-placement="right"><i class="fa fa-folder-open"></i> ${ _('Workspace') }</a>
           </li>
         % endif
 
@@ -392,7 +392,7 @@ ${ layout.menubar(section='workflows') }
 
   <div id="formActions" class="form-actions center">
   % if user_can_edit_job:
-    <button data-bind="disable: workflow.read_only, visible: !workflow.read_only(), click: save_workflow" class="btn btn-primary" id="btn-save-wf">${ _('Save') }</button>
+    <button data-bind="disable: workflow.read_only, visible: !workflow.read_only()" class="btn btn-primary" id="btn-save-wf">${ _('Save') }</button>
   % endif
     <a href="${ url('oozie:list_workflows') }" class="btn">${ _('Back') }</a>
   </div>
@@ -443,7 +443,7 @@ ${ layout.menubar(section='workflows') }
 
 <script src="/static/ext/js/knockout-min.js" type="text/javascript" charset="utf-8"></script>
 <script src="/static/ext/js/knockout.mapping-2.3.2.js" type="text/javascript" charset="utf-8"></script>
-<script src="/static/ext/js/jquery/plugins/jquery-ui-draggable-droppable-sortable-1.8.23.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="/static/ext/js/jquery/plugins/jquery-ui-1.10.4.draggable-droppable-sortable.min.js" type="text/javascript" charset="utf-8"></script>
 <script src="/static/ext/js/routie-0.3.0.min.js" type="text/javascript" charset="utf-8"></script>
 <script src="/static/ext/js/datatables-paging-0.1.js" type="text/javascript" charset="utf-8"></script>
 
@@ -637,7 +637,7 @@ function workflow_save_success(data) {
     $(document).trigger("info", "${ _('Workflow saved') }");
     workflow.reload(data.data);
     workflow.is_dirty( false );
-    workflow.loading(false);
+    workflow.loading( false );
     $("#btn-save-wf").button('reset');
   }
 }
@@ -982,6 +982,13 @@ window.onresize = function () {
   }
 };
 
+function fixLeadingSlash(path) {
+  if (path[0] != "/") {
+    return "/" + path;
+  }
+  return path;
+}
+
 var AUTOCOMPLETE_PROPERTIES;
 
 $(document).ready(function () {
@@ -1045,6 +1052,11 @@ $(document).ready(function () {
       workflow_save_success(data);
       submitWorkflow($("#runUnsaved").data('submit-url'));
     });
+  });
+
+  $('#btn-save-wf').on("click", function() {
+    save_workflow();
+    return false;
   });
 
   function submitWorkflow(url) {

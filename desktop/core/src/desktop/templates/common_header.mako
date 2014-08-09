@@ -45,6 +45,7 @@ from django.utils.translation import ugettext as _
   <meta charset="utf-8">
   <title>Hue ${get_nice_name(current_app, section)} ${get_title(title)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/static/art/favicon.ico" />
   <meta name="description" content="">
   <meta name="author" content="">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -137,7 +138,7 @@ from django.utils.translation import ugettext as _
   </script>
 
   <script src="/static/js/hue.utils.js"></script>
-  <script src="/static/ext/js/jquery/jquery-2.0.2.min.js"></script>
+  <script src="/static/ext/js/jquery/jquery-2.1.1.min.js"></script>
   <script src="/static/js/jquery.migration.js"></script>
   <script src="/static/js/jquery.filechooser.js"></script>
   <script src="/static/js/jquery.selector.js"></script>
@@ -303,9 +304,12 @@ from django.utils.translation import ugettext as _
       <a title="${ _('Administration') }" rel="navigator-tooltip" href="index.html#" data-toggle="dropdown" class="dropdown-toggle"><i class="fa fa-cogs"></i>&nbsp;<span class="hideable">${user.username}&nbsp;</span><b class="caret"></b></a>
       <ul class="dropdown-menu">
         <li><a href="${ url('useradmin.views.edit_user', username=urllib.quote(user.username)) }"><i class="fa fa-key"></i>&nbsp;&nbsp;${_('Edit Profile')}</a></li>
-        %if user.is_superuser:
-        <li><a href="${ url('useradmin.views.list_users') }"><i class="fa fa-group"></i>&nbsp;&nbsp;${_('Manage users')}</a></li>
-        %endif
+        % if user.is_superuser:
+          <li><a href="${ url('useradmin.views.list_users') }"><i class="fa fa-group"></i>&nbsp;&nbsp;${_('Manage Users')}</a></li>
+          % if 'security' in apps:
+          <li><a href="${ url('security:index') }">&nbsp;<i class="fa fa-lock"></i>&nbsp;&nbsp;${_('Hadoop Security')}</a></li>
+          % endif
+        % endif
       </ul>
     </li>
     % if 'help' in apps:
@@ -321,10 +325,10 @@ from django.utils.translation import ugettext as _
   % endif
 
   </div>
-    <a class="brand nav-tooltip pull-left" title="${_('About Hue')}" rel="navigator-tooltip" href="/about"><img src="/static/art/hue-logo-mini-white.png" data-orig="/static/art/hue-logo-mini-white.png" data-hover="/static/art/hue-logo-mini-white-hover.png"/></a>
+    <a class="brand nav-tooltip pull-left" title="${_('About Hue')}" rel="navigator-tooltip" href="/about"><img src="/static/art/hue-logo-mini-white.png" data-orig="/static/art/hue-logo-mini-white.png" data-hover="/static/art/hue-logo-mini-white-hover.png" /></a>
     % if user.is_authenticated() and section != 'login':
      <ul class="nav nav-pills pull-left">
-       <li><a title="${_('My documents')}" rel="navigator-tooltip" href="${ url('desktop.views.home') }" style="padding-bottom:2px!important"><i class="fa fa-home" style="font-size: 19px"></i></a></li>
+       <li><a title="${_('My documents')}" rel="navigator-tooltip" href="${ url('desktop.views.home') }" style="padding-bottom:2px!important"><i class="fa fa-home" style="font-size: 19px"></i></a></li>        
        <%
          query_apps = count_apps(apps, ['beeswax', 'impala', 'rdbms', 'pig', 'jobsub', 'spark']);
        %>
@@ -333,22 +337,22 @@ from django.utils.translation import ugettext as _
          <a title="${_('Query data')}" rel="navigator-tooltip" href="#" data-toggle="dropdown" class="dropdown-toggle">${_('Query Editors')} <b class="caret"></b></a>
          <ul role="menu" class="dropdown-menu">
            % if 'beeswax' in apps:
-           <li><a href="/${apps['beeswax'].display_name}"><img src="${ apps['beeswax'].icon_path }"/> ${_('Hive')}</a></li>
+           <li><a href="/${apps['beeswax'].display_name}"><img src="${ apps['beeswax'].icon_path }" class="app-icon"/> ${_('Hive')}</a></li>
            % endif
            % if 'impala' in apps:
-           <li><a href="/${apps['impala'].display_name}"><img src="${ apps['impala'].icon_path }"/> ${_('Impala')}</a></li>
+           <li><a href="/${apps['impala'].display_name}"><img src="${ apps['impala'].icon_path }" class="app-icon"/> ${_('Impala')}</a></li>
            % endif
            % if 'rdbms' in apps:
-           <li><a href="/${apps['rdbms'].display_name}"><img src="${ apps['rdbms'].icon_path }"/> ${_('DB Query')}</a></li>
+           <li><a href="/${apps['rdbms'].display_name}"><img src="${ apps['rdbms'].icon_path }" class="app-icon"/> ${_('DB Query')}</a></li>
            % endif
            % if 'pig' in apps:
-           <li><a href="/${apps['pig'].display_name}"><img src="${ apps['pig'].icon_path }"/> ${_('Pig')}</a></li>
+           <li><a href="/${apps['pig'].display_name}"><img src="${ apps['pig'].icon_path }" class="app-icon"/> ${_('Pig')}</a></li>
            % endif
            % if 'jobsub' in apps:
-           <li><a href="/${apps['jobsub'].display_name}"><img src="${ apps['jobsub'].icon_path }"/> ${_('Job Designer')}</a></li>
+           <li><a href="/${apps['jobsub'].display_name}"><img src="${ apps['jobsub'].icon_path }" class="app-icon"/> ${_('Job Designer')}</a></li>
            % endif
            % if 'spark' in apps:
-           <li><a href="/${apps['spark'].display_name}"><img src="${ apps['spark'].icon_path }"/> ${_('Spark')}</a></li>
+           <li><a href="/${apps['spark'].display_name}"><img src="${ apps['spark'].icon_path }" class="app-icon"/> ${_('Spark')}</a></li>
            % endif
          </ul>
        </li>
@@ -363,16 +367,16 @@ from django.utils.translation import ugettext as _
          <a title="${_('Manage data')}" rel="navigator-tooltip" href="#" data-toggle="dropdown" class="dropdown-toggle">${_('Data Browsers')} <b class="caret"></b></a>
          <ul role="menu" class="dropdown-menu">
            % if 'metastore' in apps:
-           <li><a href="/${apps['metastore'].display_name}"><img src="${ apps['metastore'].icon_path }"/> ${_('Metastore Tables')}</a></li>
+           <li><a href="/${apps['metastore'].display_name}"><img src="${ apps['metastore'].icon_path }" class="app-icon"/> ${_('Metastore Tables')}</a></li>
            % endif
            % if 'hbase' in apps:
-           <li><a href="/${apps['hbase'].display_name}"><img src="${ apps['hbase'].icon_path }"/> ${_('HBase')}</a></li>
+           <li><a href="/${apps['hbase'].display_name}"><img src="${ apps['hbase'].icon_path }" class="app-icon"/> ${_('HBase')}</a></li>
            % endif
            % if 'sqoop' in apps:
-           <li><a href="/${apps['sqoop'].display_name}"><img src="${ apps['sqoop'].icon_path }"/> ${_('Sqoop Transfer')}</a></li>
+           <li><a href="/${apps['sqoop'].display_name}"><img src="${ apps['sqoop'].icon_path }" class="app-icon"/> ${_('Sqoop Transfer')}</a></li>
            % endif
            % if 'zookeeper' in apps:
-           <li><a href="/${apps['zookeeper'].display_name}"><img src="${ apps['zookeeper'].icon_path }"/> ${_('ZooKeeper')}</a></li>
+           <li><a href="/${apps['zookeeper'].display_name}"><img src="${ apps['zookeeper'].icon_path }" class="app-icon"/> ${_('ZooKeeper')}</a></li>
            % endif
          </ul>
        </li>
@@ -383,8 +387,8 @@ from django.utils.translation import ugettext as _
        <li class="dropdown">
          <a title="${_('Schedule with Oozie')}" rel="navigator-tooltip" href="#" data-toggle="dropdown" class="dropdown-toggle">${_('Workflows')} <b class="caret"></b></a>
          <ul role="menu" class="dropdown-menu">
-           <li><a href="${ url('oozie:index') }"><img src="/oozie/static/art/icon_oozie_dashboard_24.png" /> ${_('Dashboard')}</a></li>
-           <li><a href="${ url('oozie:list_workflows') }"><img src="/oozie/static/art/icon_oozie_editor_24.png" /> ${_('Editor')}</a></li>
+           <li><a href="${ url('oozie:index') }"><img src="/oozie/static/art/icon_oozie_dashboard_48.png" class="app-icon" /> ${_('Dashboard')}</a></li>
+           <li><a href="${ url('oozie:list_workflows') }"><img src="/oozie/static/art/icon_oozie_editor_48.png" class="app-icon" /> ${_('Editor')}</a></li>
          </ul>
        </li>
        % endif
@@ -393,15 +397,19 @@ from django.utils.translation import ugettext as _
          <% collections = SearchController(user).get_search_collections() %>
          % if not collections:
            <li>
-             <a title="${_('Solr Search')}" rel="navigator-tooltip" href="${ url('search:index') }">${_('Search')}</a>
+             <a title="${_('Solr Search')}" rel="navigator-tooltip" href="${ url('search:index') }">Search</a>
            </li>
          % else:
            <li class="dropdown">
              <a title="${_('Solr Search')}" rel="navigator-tooltip" href="#" data-toggle="dropdown" class="dropdown-toggle">${_('Search')} <b class="caret"></b></a>
              <ul role="menu" class="dropdown-menu">
                % for collection in collections:
-               <li><a href="${ url('search:index') }?collection=${ collection.id }"><img src="${ collection.icon }"/> ${ collection.label }</a></li>
+               <li><a href="${ url('search:index') }?collection=${ collection.id }"><img src="${ collection.icon }" class="app-icon"/> ${ collection.label }</a></li>
                % endfor
+               % if user.is_superuser:
+                 <li class="divider"></li>
+                 <li><a href="${ url('indexer:collections') }"><i class="fa fa-database"></i> ${ _('Indexes') }</a></li>
+               % endif
              </ul>
            </li>
          % endif
@@ -411,7 +419,7 @@ from django.utils.translation import ugettext as _
          <a href="#" data-toggle="dropdown" class="dropdown-toggle">${_('Other apps')} <b class="caret"></b></a>
          <ul role="menu" class="dropdown-menu">
            % for other in other_apps:
-             <li><a href="/${ other.display_name }"><img src="${ other.icon_path }"/> ${ other.nice_name }</a></li>
+             <li><a href="/${ other.display_name }"><img src="${ other.icon_path }" class="app-icon"/> ${ other.nice_name }</a></li>
            % endfor
          </ul>
        </li>

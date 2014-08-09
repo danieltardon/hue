@@ -29,7 +29,7 @@ from django.utils.translation import ugettext as _
                 <li data-bind="visible: label == '/'"><a href="#" data-bind="click: show"><span class="divider" data-bind="text: label"></span></a></li>
                 <li data-bind="visible: label != '/'"><a href="#" data-bind="text: label, click: show"></a><span class="divider">/</span></li>
             </ul>
-            <input id="hueBreadcrumbText" type="text" class="input-xxlarge" style="margin-top:4px;margin-right:4px;display:none" data-bind="value: currentPath" />
+            <input id="hueBreadcrumbText" type="text" class="input-xxlarge" style="margin-top:4px;margin-right:4px;display:none" data-bind="value: currentPath" autocomplete="off" />
         </li>
         <li class="pull-right">
           <a href="${url('filebrowser.views.view', path=urlencode(path))}?default_to_trash" style="line-height:18px" title="${_('View trash')}">
@@ -64,7 +64,7 @@ from django.utils.translation import ugettext as _
             <ul class="nav">
               <li class="currentApp">
                 <a href="/${app_name}">
-                  <img src="/filebrowser/static/art/icon_filebrowser_24.png" />
+                  <img src="/filebrowser/static/art/icon_filebrowser_48.png" class="app-icon" />
                   ${ _('File Browser') }
                 </a>
               </li>

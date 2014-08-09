@@ -27,78 +27,73 @@ ${ commonheader(_('Search'), "search", user, "29px") | n,unicode }
 <link rel="stylesheet" href="/search/static/css/admin.css">
 
 <div class="search-bar" style="height: 30px">
-    <div class="pull-right" style="margin-top: 4px; margin-right: 20px">
-      <a href="${ url('search:index') }"><i class="fa fa-share"></i> ${ _('Search page') }</a>
-    </div>
-  <h4>${_('Collection Manager')}</h4>
+  <div class="pull-right">
+    <a class="btn importBtn" href="${ url('indexer:collections') }">
+      <i class="fa fa-database"></i> ${ _('Indexes') }
+    </a>
+  </div>
+  <h4><i class="fa fa-tags"></i> ${_('Dashboards')}</h4>
 </div>
-
 
 <div class="container-fluid">
-  <div class="card">
-  <%actionbar:render>
-    <%def name="search()">
-      <input type="text" placeholder="${_('Filter collections by name...')}" class="input-xlarge search-query" id="filterInput" data-bind="visible: collections().length > 0 && !isLoading()">
-    </%def>
+  <div class="card card-home card-small">
+    <%actionbar:render>
+      <%def name="search()">
+        <input type="text" placeholder="${_('Filter dashboards...')}" class="input-xlarge search-query" id="filterInput" data-bind="visible: collections().length > 0 && !isLoading()">
+      </%def>
 
-    <%def name="creation()">
-      <button type="button" class="btn importBtn" data-bind="visible: collections().length > 0 && !isLoading()"><i class="fa fa-plus-circle"></i> ${ _('Import') }</button>
-    </%def>
-  </%actionbar:render>
+      <%def name="actions()">
+        <a class="btn" data-bind="visible: collections().length > 0 && !isLoading(), click: $root.copyCollections, clickBubble: false"><i class="fa fa-files-o"></i> ${_('Copy')}</a>
+        <a class="btn" data-bind="visible: collections().length > 0 && !isLoading(), click: $root.markManyForDeletion, clickBubble: false"><i class="fa fa-times"></i> ${_('Delete')}</a>
+      </%def>
 
-  <div class="row-fluid" data-bind="visible: collections().length == 0 && !isLoading()">
-    <div class="span10 offset1 center importBtn" style="cursor: pointer">
-      <i class="fa fa-plus-circle waiting"></i>
-      <h1 class="emptyMessage">${ _('There are currently no collections defined.') }<br/><a href="javascript:void(0)" class="importBtn">${ _('Click here to add') }</a> ${ _('one or more.') }</h1>
-    </div>
-  </div>
-  <div class="row-fluid" data-bind="visible: isLoading()">
-    <div class="span10 offset1 center">
-      <i class="fa fa-spinner fa-spin" style="font-size: 60px; color: #DDD"></i>
-    </div>
-  </div>
-  <div class="row-fluid">
-    <div class="span12">
-      <p>
-      <ul id="collections" data-bind="template: {name: 'collectionTemplate', foreach: filteredCollections}">
-      </ul>
-      </p>
-    </div>
-  </div>
+      <%def name="creation()">
+        <a data-bind="visible: collections().length > 0 && !isLoading()" class="btn" href="${ url('search:new_search') }" title="${ _('Create a new dashboard') }"><i class="fa fa-plus-circle"></i> ${ _('Create') }</a>
+      </%def>
+    </%actionbar:render>
 
-  <script id="collectionTemplate" type="text/html">
-    <li class="collectionRow" data-bind="click: $root.editCollection" title="${ _('Click to edit') }">
-      <div class="pull-right" style="margin-top: 10px;margin-right: 10px; cursor: pointer">
-        <a data-bind="click: $root.copyCollection, clickBubble: false"><i class="fa fa-files-o"></i> ${_('Copy')}</a> &nbsp;
-        <a data-bind="click: $root.markForDeletion, clickBubble: false"><i class="fa fa-times"></i> ${_('Delete')}</a>
+    <div class="row-fluid" data-bind="visible: collections().length == 0 && !isLoading()">
+      <div class="span10 offset1 center importBtn pointer">
+        <a href="${ url('search:new_search') }"><i class="fa fa-plus-circle waiting"></i></a>
+        <h1 class="emptyMessage">
+          ${ _('There are currently no dashboards defined.') }<br/>
+          <a href="${ url('search:new_search') }">${ _('Click here to add') }</a> ${ _('one or more.') }</h1>
+        </h1>
       </div>
-      <h4><i class="fa fa-list"></i> <span data-bind="text: label"></span></h4>
-    </li>
-  </script>
-  </div>
-
-</div>
-
-<div id="importModal" class="modal hide fade">
-  <div class="modal-header">
-    <button type="button" class="close" data-dismiss="modal">&times;</button>
-    <h3>${ _('Import Collections and Cores') }</h3>
-  </div>
-  <div class="modal-body">
-    <img src="/static/art/spinner.gif" data-bind="visible: isLoadingImportables()" />
-    <div data-bind="visible: !isLoadingImportables()">
-      <h5>${ _('Collections') }</h5>
-      <div class="alert" data-bind="visible: importableCollections().length == 0">${ _('All available collections from the Solr URL in hue.ini have been imported.') }</div>
-      <table data-bind="visible: importableCollections().length > 0, template: {name: 'importableTemplate', foreach: importableCollections}"></table>
-
-      <h5 style="margin-top: 20px">${ _('Cores') }</h5>
-      <div class="alert" data-bind="visible: importableCores().length == 0">${ _('All available cores from the Solr URL in hue.ini have been imported.') }</div>
-      <table data-bind="visible: importableCores().length > 0, template: {name: 'importableTemplate', foreach: importableCores}"></table>
     </div>
-  </div>
-  <div class="modal-footer">
-    <a href="javascript:void(0)" class="btn" data-dismiss="modal">${ _('Cancel') }</a>
-    <button id="importModalBtn" href="javascript:void(0)" class="btn btn-primary disable-feedback" data-bind="enable: selectedImportableCollections().length > 0 || selectedImportableCores().length > 0, click: importCollectionsAndCores">${ _('Import Selected') }</button>
+
+    <div class="row-fluid" data-bind="visible: isLoading()">
+      <div class="span10 offset1 center">
+        <i class="fa fa-spinner fa-spin spinner"></i>
+      </div>
+    </div>
+
+    <div class="row-fluid" data-bind="visible: collections().length > 0 && !isLoading()">
+      <div class="span12">
+        <table class="table table-condensed">
+          <thead>
+            <tr>
+              <th style="width: 1%">
+                <span data-bind="click: toggleSelectAll, css: {'fa-check': !ko.utils.arrayFilter(filteredCollections(), function(collection) {return !collection.selected()}).length}" class="hueCheckbox fa"></span>
+              </th>
+              <th>${ _('Name') }</th>
+              <th>${ _('Solr Index') }</th>
+              <th width="1%" class="center">${ _('Shared') }</th>
+            </tr>
+          </thead>
+          <tbody data-bind="foreach: filteredCollections">
+            <tr>
+              <td data-bind="click: $root.toggleCollectionSelect.bind($root), clickBubble: false">
+                <span data-bind="css: {'fa-check': $root.filteredCollections()[$index()].selected()}" class="hueCheckbox fa"></span>
+              </td>
+              <td><a data-bind="text: label, click: $root.editCollection" title="${ _('Click to edit') }" class="pointer"></a></td>
+              <td><a data-bind="text: name, click: $root.editIndex" title="${ _('Click to edit the index') }" class="pointer"></a></td>
+              <td class="center"><span data-bind="css: { 'fa fa-check': enabled }"></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -117,59 +112,42 @@ ${ commonheader(_('Search'), "search", user, "29px") | n,unicode }
     <h3>${_('Confirm Delete')}</h3>
   </div>
   <div class="modal-body">
-    <p>${_('Are you sure you want to delete this collection?')}</p>
+    <p>${_('Are you sure you want to delete the selected dashboards?')}</p>
   </div>
   <div class="modal-footer">
-    <a class="btn" data-dismiss="modal">${_('No')}</a>
-    <a id="deleteModalBtn" class="btn btn-danger disable-feedback" data-bind="click: deleteCollection">${_('Yes')}</a>
+    <a class="btn" data-dismiss="modal">${ _('No') }</a>
+    <a id="deleteModalBtn" class="btn btn-danger disable-feedback" data-bind="click: deleteCollections">${ _('Yes') }</a>
   </div>
 </div>
 
-
-<style type="text/css">
-  #collections {
-    list-style-type: none;
-    margin: 0;
-    padding: 0;
-    width: 100%;
-  }
-
-  .placeholder {
-    height: 40px;
-    background-color: #F5F5F5;
-    border: 1px solid #E3E3E3;
-  }
-</style>
-
 <script src="/static/ext/js/knockout-min.js" type="text/javascript" charset="utf-8"></script>
-<script src="/search/static/js/search.ko.js" type="text/javascript" charset="utf-8"></script>
+<script src="/static/ext/js/knockout.mapping-2.3.2.js" type="text/javascript" charset="utf-8"></script>
+<script src="/search/static/js/collections.ko.js" type="text/javascript" charset="utf-8"></script>
 
-<script type="text/javascript">
-
+<script>
   var appProperties = {
     labels: [],
     listCollectionsUrl: "${ url("search:admin_collections") }?format=json",
-    listImportablesUrl: "${ url("search:admin_collections_import") }?format=json",
-    importUrl: "${ url("search:admin_collections_import") }",
     deleteUrl: "${ url("search:admin_collection_delete") }",
-    copyUrl: "${ url("search:admin_collection_copy") }"
+    copyUrl: "${ url("search:admin_collection_copy") }",
+    indexerUrl: "/indexer/#link/"
   }
 
   var viewModel = new SearchCollectionsModel(appProperties);
+
   ko.applyBindings(viewModel);
 
   $(document).ready(function () {
     viewModel.updateCollections();
 
     var orderedCores;
-    serializeList();
 
-    function serializeList() {
+    (function serializeList() {
       orderedCores = [];
       $("#collections li").each(function () {
         orderedCores.push($(this).data("collection"));
       });
-    }
+    }());
 
     var filter = -1;
     $("#filterInput").on("keyup", function () {
@@ -179,45 +157,8 @@ ${ commonheader(_('Search'), "search", user, "29px") | n,unicode }
       }, 300);
     });
 
-    $("#importModal").modal({
-      show: false
-    });
-
     $("#deleteModal").modal({
       show: false
-    });
-
-    % if is_redirect:
-        showImportModal();
-    % endif
-
-    $(".importBtn").on("click", function () {
-      showImportModal();
-    });
-
-    function showImportModal() {
-      $("#importModal").modal("show");
-      viewModel.updateImportables();
-    }
-
-    $(document).on("importing", function () {
-      var _btn = $("#importModalBtn");
-      _btn.attr("data-loading-text", _btn.text() + " ...");
-      _btn.button("loading");
-    });
-
-    $(document).on("imported", function (e, data) {
-      $("#importModal").modal("hide");
-      $("#importModalBtn").button("reset");
-      if (data.status == 0){
-        $(document).trigger("info", data.message + "<br/>${_('Imported: ')}" + data.imported.join(", "));
-      }
-      else if (data.status == 1){
-        $(document).trigger("info", data.message + "<br/>${_('Imported: ')}" + data.imported.join(", ") + "<br/>${_('Not imported: ')}" + data.notImported.join(", "));
-      }
-      else {
-        $(document).trigger("error", data.message+ "<br/>${_('Not imported: ')}" + data.notImported.join(", "));
-      }
     });
 
     $(document).on("deleting", function () {
@@ -229,17 +170,16 @@ ${ commonheader(_('Search'), "search", user, "29px") | n,unicode }
     $(document).on("collectionDeleted", function () {
       $("#deleteModal").modal("hide");
       $("#deleteModalBtn").button("reset");
-      $(document).trigger("info", "${ _("Collection deleted successfully.") }");
+      $(document).trigger("info", "${ _("Dashboard deleted successfully.") }");
     });
 
     $(document).on("collectionCopied", function () {
-      $(document).trigger("info", "${ _("Collection copied successfully.") }");
+      $(document).trigger("info", "${ _("Dashboard copied successfully.") }");
     });
 
     $(document).on("confirmDelete", function () {
       $("#deleteModal").modal('show');
     });
-
   });
 </script>
 

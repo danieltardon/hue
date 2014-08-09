@@ -59,9 +59,9 @@
 </%def>
 
 <%def name="rows_for_conf_vars(rows)">
-    %  for k, v in rows.iteritems():
+    %  for k, v in sorted(rows.iteritems()):
         <tr>
-            <td>${format_counter_name(k)}</td>
+            <td>${k}</td>
         <%
             splitArray = v.split(",")
         %>
@@ -72,19 +72,9 @@
                 is_hdfs_uri = bool(url_splitted[1])
             %>
             % if is_hdfs_uri:
-                <%
-                  try:
-                    if request.fs.isfile(url_splitted[2]):
-                      target = "FileViewer"
-                    else:
-                      target = "FileBrowser"
-                  except WebHdfsException, e:
-                    # Permissions error... see HUE-1593
-                    target = "FileBrowser"
-                %>
-                    <a href="${location_to_url(val)}" title="${val}" target="${target}">${val}</a>
+                <a href="${location_to_url(val)}" title="${val}">${val}</a>
                 % if i != len(splitArray) - 1:
-                        <br>
+                  <br>
                 % endif
             % else:
                 ${val}
@@ -201,7 +191,7 @@ ${ comps.menubar() }
                 % else:
                 <div class="tab-pane active" id="tasks">
                 % endif
-                % if job.is_retired and not job.is_mr2:
+                % if job.is_retired:
                   ${ _('This jobs is ')} <span class="label label-warning">${ _('retired') }</span> ${ _(' and so has little information available.') }
                   <br/>
                   <br/>
@@ -357,39 +347,19 @@ $(document).ready(function () {
     }
   });
 
-  var _metadataTable = $("#metadataTable").dataTable({
-    "bPaginate": false,
-    "bLengthChange": false,
-    "bInfo": false,
-    "bAutoWidth": false,
-    "aoColumns": [
-      { "sWidth": "30%" },
-      { "sWidth": "70%" }
-    ],
-    "oLanguage": {
-      "sEmptyTable": "${_('No data available')}",
-      "sZeroRecords": "${_('No matching records')}"
-    }
-  });
-
-  var _rawConfigurationTable = $("#rawConfigurationTable").dataTable({
-    "bPaginate": false,
-    "bLengthChange": false,
-    "bInfo": false,
-    "bAutoWidth": false,
-    "aoColumns": [
-      { "sWidth": "30%" },
-      { "sWidth": "70%" }
-    ],
-    "oLanguage": {
-      "sEmptyTable": "${_('No data available')}",
-      "sZeroRecords": "${_('No matching records')}"
-    }
-  });
-
-  $("#metadataFilter").keyup(function () {
-    _metadataTable.fnFilter($(this).val());
-    _rawConfigurationTable.fnFilter($(this).val());
+  $("#metadataFilter").jHueDelayedInput(function(){
+    $("#metadataTable tbody tr").removeClass("hide");
+    $("#metadataTable tbody tr").each(function () {
+      if ($(this).text().toLowerCase().indexOf($("#metadataFilter").val().toLowerCase()) == -1) {
+        $(this).addClass("hide");
+      }
+    });
+    $("#rawConfigurationTable tbody tr").removeClass("hide");
+    $("#rawConfigurationTable tbody tr").each(function () {
+      if ($(this).text().toLowerCase().indexOf($("#metadataFilter").val().toLowerCase()) == -1) {
+        $(this).addClass("hide");
+      }
+    });
   });
 
   $(".jobCountersTable").dataTable({
@@ -546,20 +516,19 @@ $(document).ready(function () {
     var _this = $(this);
     _this.attr("data-loading-text", _this.text() + " ...");
     _this.button("loading");
-    $.post(_this.data("killurl"),
-            {
-              "format": "json"
-            },
-            function (response) {
-              _this.button("reset");
-              $("#killModal").modal("hide");
-              if (response.status != 0) {
-                $(document).trigger("error", "${ _('There was a problem killing this job.') }");
-              }
-              else {
-                callJobDetails({ url: _this.data("url")});
-              }
-            }
+    $.post(_this.data("killurl"), {
+          "format": "json"
+        },
+        function (response) {
+          _this.button("reset");
+          $("#killModal").modal("hide");
+          if (response.status != 0) {
+            $(document).trigger("error", "${ _('There was a problem killing this job.') }");
+          }
+          else {
+            callJobDetails({ url: _this.data("url")});
+          }
+        }
     );
   });
 

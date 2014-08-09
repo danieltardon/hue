@@ -42,6 +42,9 @@
   # Enable or disable backtrace for server error
   ## http_500_debug_mode=true
 
+  # Enable or disable memory profiling.
+  ## memory_profiler=false
+
   # Server email for internal error messages
   ## django_server_email='hue@localhost.localdomain'
 
@@ -69,8 +72,9 @@
   # See http://www.openssl.org/docs/apps/ciphers.html for more information on cipher list format.
   ## ssl_cipher_list=DEFAULT:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2
 
-  # LDAP password of the hue user used for LDAP authentications. For example for LDAP Authentication with HiveServer2.
-  # ldap_password=
+  # LDAP username and password of the hue user used for LDAP authentications. For example for LDAP Authentication with HiveServer2.
+  ## ldap_username=hue
+  ## ldap_password=
 
   # Default encoding for site data
   ## default_site_encoding=utf-8
@@ -78,6 +82,9 @@
   # Help improve Hue with anonymous usage analytics.
   # Use Google Analytics to see how many times an application or specific section of an application is used, nothing more.
   ## collect_usage=true
+
+  # Support for HTTPS termination at the load-balancer level with SECURE_PROXY_SSL_HEADER.
+  ## secure_proxy_ssl_header=false
 
   # Comma-separated list of Django middleware classes to use.
   # See https://docs.djangoproject.com/en/1.4/ref/middleware/ for more details on middlewares in Django.
@@ -98,6 +105,8 @@
 
   # Size in KB/MB/GB for audit log to rollover.
   ## audit_log_max_file_size=100MB
+
+#poll_enabled=false
 
   # Administrators
   # ----------------
@@ -167,9 +176,6 @@
     # The search base for finding users and groups
     ## base_dn="DC=mycompany,DC=com"
 
-    # The NT domain to connect to (only for use with Active Directory)
-    ## nt_domain=mycompany.com
-
     # URL of the LDAP server
     ## ldap_url=ldap://auth.mycompany.com
 
@@ -223,7 +229,7 @@
       # The username attribute in the LDAP schema
       ## user_name_attr=sAMAccountName
 
-      [[[groups]]]
+    [[[groups]]]
 
       # Base filter for searching for groups
       ## group_filter="objectclass=*"
@@ -231,15 +237,65 @@
       # The username attribute in the LDAP schema
       ## group_name_attr=cn
 
-  # Configuration options for specifying the Desktop Database.  For more info,
-  # see http://docs.djangoproject.com/en/1.1/ref/settings/#database-engine
+    [[[ldap_servers]]]
+
+      ## [[[[mycompany]]]]
+
+        # The search base for finding users and groups
+        ## base_dn="DC=mycompany,DC=com"
+
+        # URL of the LDAP server
+        ## ldap_url=ldap://auth.mycompany.com
+
+        # A PEM-format file containing certificates for the CA's that
+        # Hue will trust for authentication over TLS.
+        # The certificate for the CA that signed the
+        # LDAP server certificate must be included among these certificates.
+        # See more here http://www.openldap.org/doc/admin24/tls.html.
+        ## ldap_cert=
+        ## use_start_tls=true
+
+        # Distinguished name of the user to bind as -- not necessary if the LDAP server
+        # supports anonymous searches
+        ## bind_dn="CN=ServiceAccount,DC=mycompany,DC=com"
+
+        # Password of the bind user -- not necessary if the LDAP server supports
+        # anonymous searches
+        ## bind_password=
+
+        # Pattern for searching for usernames -- Use <username> for the parameter
+        # For use when using LdapBackend for Hue authentication
+        ## ldap_username_pattern="uid=<username>,ou=People,dc=mycompany,dc=com"
+
+        ## Use search bind authentication.
+        ## search_bind_authentication=true
+
+        ## [[[[[users]]]]]
+
+          # Base filter for searching for users
+          ## user_filter="objectclass=Person"
+
+          # The username attribute in the LDAP schema
+          ## user_name_attr=sAMAccountName
+
+        ## [[[[[groups]]]]]
+
+          # Base filter for searching for groups
+          ## group_filter="objectclass=groupOfNames"
+
+          # The username attribute in the LDAP schema
+          ## group_name_attr=cn
+
+  # Configuration options for specifying the Desktop Database. For more info,
+  # see http://docs.djangoproject.com/en/1.4/ref/settings/#database-engine
   # ------------------------------------------------------------------------
   [[database]]
     # Database engine is typically one of:
-    # postgresql_psycopg2, mysql, or sqlite3
+    # postgresql_psycopg2, mysql, sqlite3 or oracle.
     #
-    # Note that for sqlite3, 'name', below is a filename;
-    # for other backends, it is the database name.
+    # Note that for sqlite3, 'name', below is a a path to the filename. For other backends, it is the database name.
+    # Note for Oracle, options={'threaded':true} must be set in order to avoid crashes.
+    # Note for Oracle, you can use the Oracle Service Name by setting "port=0" and then "name=<host>:<port>/<service_name>".
     ## engine=sqlite3
     ## host=
     ## port=
@@ -364,7 +420,7 @@
 
 
 ###########################################################################
-# Settings to configure OPENID
+# Settings to configure OpenId
 ###########################################################################
 
 [libopenid]
@@ -433,6 +489,12 @@
   ## authenticate_url_google=https://www.googleapis.com/oauth2/v1/userinfo?access_token=
   ## authenticate_url_facebook=https://graph.facebook.com/me?access_token=
   ## authenticate_url_linkedin=https://api.linkedin.com/v1/people/~:(email-address)?format=json&oauth2_access_token=
+
+  # Username Map. Json Hash format.
+  # Replaces username parts in order to simplify usernames obtained
+  # Example: {"@sub1.domain.com":"_S1", "@sub2.domain.com":"_S2"}
+  # converts 'email@sub1.domain.com' to 'email_S1'
+  ## username_map={}
 
   # Whitelisted domains (only applies to Google OAuth). CSV format.
   ## whitelisted_domains_google=
@@ -517,18 +579,6 @@
       # Change this if your HDFS cluster is Kerberos-secured
       ## security_enabled=false
 
-      # Settings about this HDFS cluster. If you install HDFS in a
-      # different location, you need to set the following.
-
-      # Defaults to $HADOOP_HDFS_HOME or /usr/lib/hadoop-hdfs
-      ## hadoop_hdfs_home=/usr/lib/hadoop-hdfs
-
-      # Defaults to $HADOOP_BIN or /usr/bin/hadoop
-      ## hadoop_bin=/usr/bin/hadoop
-
-      # Defaults to $HADOOP_CONF_DIR or /etc/hadoop/conf
-      ## hadoop_conf_dir=/etc/hadoop/conf
-
   # Configuration for YARN (MR2)
   # ------------------------------------------------------------------------
   [[yarn_clusters]]
@@ -543,20 +593,11 @@
       # Whether to submit jobs to this cluster
       submit_to=True
 
+      # Resource Manager logical name (required for HA)
+      ## logical_name=
+
       # Change this if your YARN cluster is Kerberos-secured
       ## security_enabled=false
-
-      # Settings about this MR2 cluster. If you install MR2 in a
-      # different location, you need to set the following.
-
-      # Defaults to $HADOOP_MR2_HOME or /usr/lib/hadoop-mapreduce
-      ## hadoop_mapred_home=/usr/lib/hadoop-mapreduce
-
-      # Defaults to $HADOOP_BIN or /usr/bin/hadoop
-      ## hadoop_bin=/usr/bin/hadoop
-
-      # Defaults to $HADOOP_CONF_DIR or /etc/hadoop/conf
-      ## hadoop_conf_dir=/etc/hadoop/conf
 
       # URL of the ResourceManager API
       ## resourcemanager_api_url=http://localhost:8088
@@ -566,6 +607,13 @@
 
       # URL of the HistoryServer API
       # history_server_api_url=http://localhost:19888
+
+    # HA support by specifying multiple clusters
+    # e.g.
+
+    # [[[ha]]]
+      # Resource Manager logical name (required for HA)
+      ## logical_name=my-rm-name
 
   # Configuration for MapReduce (MR1)
   # ------------------------------------------------------------------------
@@ -578,7 +626,7 @@
       # The port where the JobTracker IPC listens on
       ## jobtracker_port=8021
 
-      # JobTracker logical name.
+      # JobTracker logical name for HA
       ## logical_name=
 
       # Thrift plug-in port for the JobTracker
@@ -590,25 +638,21 @@
       # Change this if your MapReduce cluster is Kerberos-secured
       ## security_enabled=false
 
-      # Settings about this MR1 cluster. If you install MR1 in a
-      # different location, you need to set the following.
-
-      # Defaults to $HADOOP_MR1_HOME or /usr/lib/hadoop-0.20-mapreduce
-      ## hadoop_mapred_home=/usr/lib/hadoop-0.20-mapreduce
-
-      # Defaults to $HADOOP_BIN or /usr/bin/hadoop
-      ## hadoop_bin=/usr/bin/hadoop
-
-      # Defaults to $HADOOP_CONF_DIR or /etc/hadoop/conf
-      ## hadoop_conf_dir=/etc/hadoop/conf
-
     # HA support by specifying multiple clusters
     # e.g.
 
     # [[[ha]]]
-      # Enter the host on which you are running the failover JobTracker
-      # jobtracker_host=localhost-ha
+      # Enter the logical name of the JobTrackers
+      # logical_name=my-jt-name
 
+
+###########################################################################
+# Settings to configure the Filebrowser app
+###########################################################################
+
+[filebrowser]
+  # Location on local filesystem where the uploaded archives are temporary stored.
+  ## archive_upload_tempdir=/tmp
 
 ###########################################################################
 # Settings to configure liboozie
@@ -768,7 +812,7 @@
 
 
 ###########################################################################
-# Settings to configure Hbase
+# Settings to configure HBase Browser
 ###########################################################################
 
 [hbase]
@@ -778,6 +822,11 @@
 
   # Hard limit of rows or columns per row fetched before truncating.
   ## truncate_limit = 500
+
+  # 'buffered' is the default of the HBase Thrift Server.
+  # 'framed' can be used to chunk up responses,
+  # which is useful when used in conjunction with the nonblocking server in Thrift.
+  ## thrift_transport=buffered
 
 
 ###########################################################################
@@ -794,6 +843,25 @@
 
   ## Query sent when no term is entered
   ## empty_query=*:*
+
+
+###########################################################################
+# Settings to configure Solr Indexer
+###########################################################################
+
+[indexer]
+
+  # Location of the solrctl binary.
+  ## solrctl_path=/usr/bin/solrctl
+
+  # Location of the solr home.
+  ## solr_home=/usr/lib/solr
+
+  # Zookeeper ensemble.
+  ## solr_zk_ensemble=localhost:2181/solr
+
+  # The contents of this directory will be copied over to the solrctl host to its temporary directory.
+  ## config_template_path=/../hue/desktop/libs/indexer/src/data/solr_configs
 
 
 ###########################################################################
@@ -852,3 +920,15 @@
 [useradmin]
   # The name of the default user group that users will be a member of
   ## default_user_group=default
+
+
+###########################################################################
+# Settings for the Sentry lib
+###########################################################################
+
+[libsentry]
+  # Hostname or IP of server.
+  ## hostname=localhost
+
+  # Port the sentry service is running on.
+  ## port=8038

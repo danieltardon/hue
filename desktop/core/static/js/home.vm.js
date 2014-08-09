@@ -29,9 +29,22 @@ function HomeViewModel(json_tags, json_docs) {
       read: {
         users: [],
         groups: []
+      },
+      write: {
+        users: [],
+        groups: []
       }
     }
   }));
+
+  self.selectedPerm = ko.observable('read');
+  self.selectedPermLabel = ko.computed(function() {
+    if (self.selectedPerm() == 'write') {
+      return 'Modify';
+    } else {
+      return 'Read';
+    }
+  });
 
   self.selectedTag = ko.observable({});
   self.selectedTagForDelete = ko.observable({

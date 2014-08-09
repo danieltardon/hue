@@ -24,6 +24,7 @@ from django.contrib.auth.models import User, Group
 from django.forms.util import ErrorList
 from django.utils.translation import ugettext as _, ugettext_lazy as _t
 
+from desktop import conf as desktop_conf
 from desktop.lib.django_util import get_username_re_rule, get_groupname_re_rule
 
 from useradmin.models import GroupPermission, HuePermission
@@ -32,6 +33,30 @@ from useradmin.models import get_default_user_group
 
 
 LOG = logging.getLogger(__name__)
+
+
+def get_server_choices():
+  if desktop_conf.LDAP.LDAP_SERVERS.get():
+    return [(ldap_server_record_key, ldap_server_record_key) for ldap_server_record_key in desktop_conf.LDAP.LDAP_SERVERS.get()]
+  else:
+    return []
+
+def validate_dn(dn):
+  assert dn is not None, _('Full Distinguished Name required.')
+
+def validate_username(username_pattern):
+  validator = re.compile(r"^%s$" % get_username_re_rule())
+
+  assert username_pattern is not None, _('Username is required.')
+  assert len(username_pattern) <= 30, _('Username must be fewer than 30 characters.')
+  assert validator.match(username_pattern), _("Username must not contain whitespaces and ':'")
+
+def validate_groupname(groupname_pattern):
+  validator = re.compile(r"^%s$" % get_groupname_re_rule())
+
+  assert groupname_pattern is not None, _('Group name required.')
+  assert len(groupname_pattern) <= 80, _('Group name must be 80 characters or fewer.')
+  assert validator.match(groupname_pattern), _("Group name can be any character as long as it's 80 characters or fewer.")
 
 
 class UserChangeForm(django.contrib.auth.forms.UserChangeForm):
@@ -52,14 +77,14 @@ class UserChangeForm(django.contrib.auth.forms.UserChangeForm):
                                             initial=True,
                                             required=False)
 
+  class Meta(django.contrib.auth.forms.UserChangeForm.Meta):
+    fields = ["username", "first_name", "last_name", "email", "ensure_home_directory"]
+
   def __init__(self, *args, **kwargs):
     super(UserChangeForm, self).__init__(*args, **kwargs)
 
     if self.instance.id:
       self.fields['username'].widget.attrs['readonly'] = True
-
-  class Meta(django.contrib.auth.forms.UserChangeForm.Meta):
-    fields = ["username", "first_name", "last_name", "email", "ensure_home_directory"]
 
   def clean_password(self):
     return self.cleaned_data["password"]
@@ -109,9 +134,8 @@ class SuperUserChangeForm(UserChangeForm):
 
 
 class AddLdapUsersForm(forms.Form):
-  username_pattern = forms.RegexField(
+  username_pattern = forms.CharField(
       label=_t("Username"),
-      regex='^%s$' % (get_username_re_rule(),),
       help_text=_t("Required. 30 characters or fewer with username. 64 characters or fewer with DN. No whitespaces or colons."),
       error_messages={'invalid': _t("Whitespaces and ':' not allowed")})
   dn = forms.BooleanField(label=_t("Distinguished name"),
@@ -124,32 +148,33 @@ class AddLdapUsersForm(forms.Form):
                                             initial=True,
                                             required=False)
 
+  def __init__(self, *args, **kwargs):
+    super(AddLdapUsersForm, self).__init__(*args, **kwargs)
+    if get_server_choices():
+      self.fields['server'] = forms.ChoiceField(choices=get_server_choices(), required=True)
+
   def clean(self):
     cleaned_data = super(AddLdapUsersForm, self).clean()
     username_pattern = cleaned_data.get("username_pattern")
     dn = cleaned_data.get("dn")
 
-    if dn:
-      if username_pattern is not None and len(username_pattern) > 64:
-        msg = _('Too long: 64 characters or fewer and not %s.') % username_pattern
-        errors = self._errors.setdefault('username_pattern', ErrorList())
-        errors.append(msg)
-        raise forms.ValidationError(msg)
-    else:
-      if username_pattern is not None and len(username_pattern) > 30:
-        msg = _('Too long: 30 characters or fewer and not %s.') % username_pattern
-        errors = self._errors.setdefault('username_pattern', ErrorList())
-        errors.append(msg)
-        raise forms.ValidationError(msg)
+    try:
+      if dn:
+        validate_dn(username_pattern)
+      else:
+        validate_username(username_pattern)
+    except AssertionError, e:
+      errors = self._errors.setdefault('username_pattern', ErrorList())
+      errors.append(e.message)
+      raise forms.ValidationError(e.message)
 
     return cleaned_data
 
 
 class AddLdapGroupsForm(forms.Form):
-  groupname_pattern = forms.RegexField(
+  groupname_pattern = forms.CharField(
       label=_t("Name"),
       max_length=80,
-      regex='^%s$' % get_groupname_re_rule(),
       help_text=_t("Required. 80 characters or fewer."),
       error_messages={'invalid': _t("80 characters or fewer.") })
   dn = forms.BooleanField(label=_t("Distinguished name"),
@@ -170,17 +195,25 @@ class AddLdapGroupsForm(forms.Form):
                                                 initial=False,
                                                 required=False)
 
+  def __init__(self, *args, **kwargs):
+    super(AddLdapGroupsForm, self).__init__(*args, **kwargs)
+    if get_server_choices():
+      self.fields['server'] = forms.ChoiceField(choices=get_server_choices(), required=True)
+
   def clean(self):
     cleaned_data = super(AddLdapGroupsForm, self).clean()
     groupname_pattern = cleaned_data.get("groupname_pattern")
     dn = cleaned_data.get("dn")
 
-    if not dn:
-      if groupname_pattern is not None and len(groupname_pattern) > 80:
-        msg = _('Too long: 80 characters or fewer and not %s') % groupname_pattern
-        errors = self._errors.setdefault('groupname_pattern', ErrorList())
-        errors.append(msg)
-        raise forms.ValidationError(msg)
+    try:
+      if dn:
+        validate_dn(groupname_pattern)
+      else:
+        validate_groupname(groupname_pattern)
+    except AssertionError, e:
+      errors = self._errors.setdefault('groupname_pattern', ErrorList())
+      errors.append(e.message)
+      raise forms.ValidationError(e.message)
 
     return cleaned_data
 
@@ -297,3 +330,7 @@ class SyncLdapUsersGroupsForm(forms.Form):
                                             help_text=_t("Create home directory for every user, if one doesn't already exist."),
                                             initial=True,
                                             required=False)
+  def __init__(self, *args, **kwargs):
+    super(SyncLdapUsersGroupsForm, self).__init__(*args, **kwargs)
+    if get_server_choices():
+      self.fields['server'] = forms.ChoiceField(choices=get_server_choices(), required=True)

@@ -18,6 +18,7 @@
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import time
@@ -235,6 +236,45 @@ def threads(request):
     out.append("")
   return HttpResponse("\n".join(out), content_type="text/plain")
 
+@access_log_level(logging.WARN)
+def memory(request):
+  """Dumps out server threads.  Useful for debugging."""
+  if not request.user.is_superuser:
+    return HttpResponse(_("You must be a superuser."))
+
+  if not hasattr(settings, 'MEMORY_PROFILER'):
+    return HttpResponse(_("You must enable the memory profiler via the memory_profiler config in the hue.ini."))
+
+  # type, from, to, index
+  command_order = {
+    'type': 0,
+    'from': 1,
+    'to': 2,
+    'index': 3
+  }
+  default_command = [None, None, None, None]
+  commands = []
+
+  for item in request.GET:
+    res = re.match(r'(?P<command>\w+)\.(?P<count>\d+)', item)
+    if res:
+      d = res.groupdict()
+      count = int(d['count'])
+      command = str(d['command'])
+      while len(commands) <= count:
+        commands.append(default_command[:])
+      commands[count][command_order.get(command)] = request.GET.get(item)
+
+  heap = settings.MEMORY_PROFILER.heap()
+  for command in commands:
+    if command[0] is not None:
+      heap = getattr(heap, command[0])
+    if command[1] is not None and command[2] is not None:
+      heap = heap[int(command[1]):int(command[2])]
+    if command[3] is not None:
+      heap = heap[int(command[3])]
+  return HttpResponse(str(heap), content_type="text/plain")
+
 def jasmine(request):
   return render('jasmine.mako', request, None)
 
@@ -330,7 +370,7 @@ def commonheader(title, section, user, padding="90px"):
     for app in apps:
       if app.display_name not in [
           'beeswax', 'impala', 'pig', 'jobsub', 'jobbrowser', 'metastore', 'hbase', 'sqoop', 'oozie', 'filebrowser',
-          'useradmin', 'search', 'help', 'about', 'zookeeper', 'proxy', 'rdbms', 'spark']:
+          'useradmin', 'search', 'help', 'about', 'zookeeper', 'proxy', 'rdbms', 'spark', 'indexer', 'security']:
         other_apps.append(app)
       if section == app.display_name:
         current_app = app

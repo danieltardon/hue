@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 DL_FORMATS = [ 'csv', 'xls' ]
 
 
-def download(results, format):
+def download(results, format, collection):
   """
   download(results, format) -> HttpResponse
 
@@ -38,24 +38,24 @@ def download(results, format):
     LOG.error('Unknown download format "%s"' % format)
     return
 
-  data = SearchDataAdapter(results, format)
-  return export_csvxls.make_response(data[0], data[1:], format, 'query_result')
+  content_generator = SearchDataAdapter(results, format, collection)
+  generator = export_csvxls.create_generator(content_generator, format)
+  return export_csvxls.make_response(generator, format, 'query_result')
 
 
-def SearchDataAdapter(results, format):
+def SearchDataAdapter(results, format, collection):
   """
-  SearchDataAdapter(results, format, db) -> 2D array of data.
-
-  First line should be the headers.
+  SearchDataAdapter(results, format, db) -> headers, 2D array of data.
   """
   if results and results['response'] and results['response']['docs']:
     search_data = results['response']['docs']
-    order = search_data[0].keys()
-    rows = [order]
+    headers = [field['name'] for field in collection['fields']]
+
+    rows = []
 
     for data in search_data:
       row = []
-      for column in order:
+      for column in headers:
         if column not in data:
           row.append("")
         elif isinstance(data[column], basestring) or isinstance(data[column], (int, long, float, complex)):
@@ -66,4 +66,4 @@ def SearchDataAdapter(results, format):
   else:
     rows = [[]]
 
-  return rows
+  yield headers, rows

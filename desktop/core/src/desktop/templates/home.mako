@@ -51,11 +51,16 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
   .badge-left {
     border-radius: 9px 0px 0px 9px;
     padding-right: 5px;
+    font-weight: normal;
   }
 
   .badge-right {
     border-radius: 0px 9px 9px 0px;
     padding-left: 5px;
+  }
+
+  .badge-right:hover {
+    background-color: #b94a48;
   }
 
   .airy li {
@@ -84,6 +89,10 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     color: #338bb8!important;
   }
 
+  #documentShareModal .modal-body {
+    overflow-y: initial;
+  }
+
 </style>
 
 <div class="navbar navbar-inverse navbar-fixed-top nokids">
@@ -93,7 +102,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
         <ul class="nav">
           <li class="currentApp">
             <a href="${ url('desktop.views.home') }">
-              <img src="/static/art/home.png" />
+              <img src="/static/art/home.png" class="app-icon" />
               ${ _('My documents') }
             </a>
            </li>
@@ -113,24 +122,24 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
               <a href="#" data-toggle="dropdown"><i class="fa fa-plus-circle"></i> ${_('New document')}</a>
               <ul class="dropdown-menu" role="menu">
                 % if 'beeswax' in apps:
-                <li><a href="${ url('beeswax:index') }"><img src="${ apps['beeswax'].icon_path }"/> ${_('Hive Query')}</a></li>
+                <li><a href="${ url('beeswax:index') }"><img src="${ apps['beeswax'].icon_path }" class="app-icon"/> ${_('Hive Query')}</a></li>
                 % endif
                 % if 'impala' in apps:
-                <li><a href="${ url('impala:index') }"><img src="${ apps['impala'].icon_path }"/> ${_('Impala Query')}</a></li>
+                <li><a href="${ url('impala:index') }"><img src="${ apps['impala'].icon_path }" class="app-icon"/> ${_('Impala Query')}</a></li>
                 % endif
                 % if 'pig' in apps:
-                <li><a href="${ url('beeswax:index') }"><img src="${ apps['pig'].icon_path }"/> ${_('Pig Script')}</a></li>
+                <li><a href="${ url('beeswax:index') }"><img src="${ apps['pig'].icon_path }" class="app-icon"/> ${_('Pig Script')}</a></li>
                 % endif
                 % if 'spark' in apps:
-                <li><a href="${ url('spark:index') }"><img src="${ apps['spark'].icon_path }"/> ${_('Spark Job')}</a></li>
+                <li><a href="${ url('spark:index') }"><img src="${ apps['spark'].icon_path }" class="app-icon"/> ${_('Spark Job')}</a></li>
                 % endif
                 % if 'oozie' in apps:
                 <li class="dropdown-submenu">
-                  <a href="#"><img src="${ apps['oozie'].icon_path }"/> ${_('Oozie Scheduler')}</a>
+                  <a href="#"><img src="${ apps['oozie'].icon_path }" class="app-icon"/> ${_('Oozie Scheduler')}</a>
                   <ul class="dropdown-menu">
-                    <li><a href="${ url('oozie:create_workflow') }"><img src="/oozie/static/art/icon_oozie_workflow_24.png"/> ${_('Workflow')}</a></li>
-                    <li><a href="${ url('oozie:create_coordinator') }"><img src="/oozie/static/art/icon_oozie_coordinator_24.png"/> ${_('Coordinator')}</a></li>
-                    <li><a href="${ url('oozie:create_bundle') }"><img src="/oozie/static/art/icon_oozie_bundle_24.png"/> ${_('Bundle')}</a></li>
+                    <li><a href="${ url('oozie:create_workflow') }"><img src="/oozie/static/art/icon_oozie_workflow_48.png" class="app-icon"/> ${_('Workflow')}</a></li>
+                    <li><a href="${ url('oozie:create_coordinator') }"><img src="/oozie/static/art/icon_oozie_coordinator_48.png" class="app-icon"/> ${_('Coordinator')}</a></li>
+                    <li><a href="${ url('oozie:create_bundle') }"><img src="/oozie/static/art/icon_oozie_bundle_48.png" class="app-icon"/> ${_('Bundle')}</a></li>
                   </ul>
                 </li>
                 % endif
@@ -151,7 +160,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
            <!-- ko template: { name: 'tag-template', foreach: myTags } -->
            <!-- /ko -->
            <li data-bind="visible: myTags().length == 0">
-             <a href="javascript:void(0)" class="edit-tags" style="line-height:24px">
+             <a href="javascript:void(0)" class="edit-tags" style="line-height:24px" data-bind="click: addTag">
                <i class="fa fa-plus-circle"></i> ${_('You currently own no projects. Click here to add one now!')}
              </a>
            </li>
@@ -241,7 +250,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
 
 <script type="text/html" id="document-template">
   <tr>
-    <td style="width: 26px"><img data-bind="attr: { src: icon }"></td>
+    <td style="width: 26px"><img data-bind="attr: { src: icon }" class="app-icon"></td>
     <td><a data-bind="attr: { href: url }, text: name"></a></td>
     <td data-bind="text: description"></td>
     <td data-bind="text: lastModified"></td>
@@ -331,25 +340,42 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     <p>
       <div class="row-fluid">
         <div class="span6">
-          <h4 class="muted" style="margin-top:0px">${_('Users')}</h4>
-          <div data-bind="visible: selectedDoc().perms.read.users.length == 0">${_('The document is not shared with any user.')}</div>
+          <h4 class="muted" style="margin-top:0px">${_('Read')}</h4>
+          <div data-bind="visible: (selectedDoc().perms.read.users.length == 0 && selectedDoc().perms.read.groups.length == 0)">${_('The document is not shared for read.')}</div>
           <ul class="unstyled airy" data-bind="foreach: selectedDoc().perms.read.users">
-            <li><span class="badge badge-left"><i class="fa fa-user"></i> <span data-bind="text: prettifyUsername(id)"></span></span><span class="badge badge-important badge-right trash-share" data-bind="click: removeUserShare"><i class="fa fa-times-circle"></i></span></li>
+            <li><span class="badge badge-info badge-left"><i class="fa fa-user"></i> <span data-bind="text: prettifyUsername(id)"></span></span><span class="badge badge-right trash-share" data-bind="click: removeUserReadShare"> <i class="fa fa-times"></i></li>
           </ul>
-        </div>
-        <div class="span6">
-          <h4 class="muted" style="margin-top:0px">${_('Groups')}</h4>
-          <div data-bind="visible: selectedDoc().perms.read.groups.length == 0">${_('The document is not shared with any group.')}</div>
           <ul class="unstyled airy" data-bind="foreach: selectedDoc().perms.read.groups">
-            <li><span class="badge badge-left"><i class="fa fa-users"></i> <span data-bind="text: name"></span></span><span class="badge badge-important badge-right trash-share" data-bind="click: removeGroupShare"><i class="fa fa-times-circle"></i></span></li>
+            <li><span class="badge badge-info badge-left"><i class="fa fa-users"></i> ${ _('Group') } &quot;<span data-bind="text: name"></span>&quot;</span><span class="badge badge-right trash-share" data-bind="click: removeGroupReadShare"> <i class="fa fa-times"></i></li>
           </ul>
         </div>
+
+        <div class="span6">
+          <h4 class="muted" style="margin-top:0px">${_('Read and Modify')}</h4>
+          <div data-bind="visible: (selectedDoc().perms.write.users.length == 0 && selectedDoc().perms.write.groups.length == 0)">${_('The document is not shared for read and modify.')}</div>
+          <ul class="unstyled airy" data-bind="foreach: selectedDoc().perms.write.users">
+            <li><span class="badge badge-info badge-left"><i class="fa fa-user"></i> <span data-bind="text: prettifyUsername(id)"></span></span><span class="badge badge-right trash-share" data-bind="click: removeUserWriteShare"> <i class="fa fa-times"></i></li>
+          </ul>
+          <ul class="unstyled airy" data-bind="foreach: selectedDoc().perms.write.groups">
+            <li><span class="badge badge-info badge-left"><i class="fa fa-users"></i> ${ _('Group') } &quot;<span data-bind="text: name"></span>&quot;</span><span class="badge badge-right trash-share" data-bind="click: removeGroupWriteShare"> <i class="fa fa-times"></i></li>
+          </ul>
+        </div>
+
       </div>
       <div class="clearfix"></div>
       <div style="margin-top: 20px">
         <div class="input-append">
           <input id="documentShareTypeahead" type="text" style="width: 460px" placeholder="${_('You can type a username or a group')}">
-          <a id="documentShareAddBtn" class="btn" type="button"><i class="fa fa-plus-circle"></i> ${_('Add')}</a>
+          <div class="btn-group">
+            <a id="documentShareAddBtn" class="btn"><i class="fa fa-plus-circle"></i> <span data-bind="text: selectedPermLabel"></span></a>
+            <a class="btn dropdown-toggle" data-toggle="dropdown">
+              <span class="caret"></span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a data-bind="click: changeDocumentSharePerm.bind(null, 'read')" href="javascript:void(0)">${ _('Read') }</a></li>
+              <li><a data-bind="click: changeDocumentSharePerm.bind(null, 'write')" href="javascript:void(0)">${ _('Read and Modify') }</a></li>
+            </ul>
+          </div>
         </div>
       </div>
     </p>
@@ -368,6 +394,9 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
 <script type="text/javascript" charset="utf-8">
   var viewModel, JSON_USERS_GROUPS;
 
+  var JSON_TAGS = ${ json_tags | n,unicode };
+  var JSON_DOCS = ${ json_documents | n,unicode };
+
   function prettifyUsername(userId) {
     var _user = null;
     for (var i = 0; i < JSON_USERS_GROUPS.users.length; i++) {
@@ -382,7 +411,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
   }
 
   $(document).ready(function () {
-    viewModel = new HomeViewModel(${ json_tags | n,unicode }, ${ json_documents | n,unicode });
+    viewModel = new HomeViewModel(JSON_TAGS, JSON_DOCS);
     ko.applyBindings(viewModel);
 
     var selectedUserOrGroup, map, dropdown = null;
@@ -448,6 +477,26 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
       $.totalStorage("hueHomeSelectedTag", value.id());
     });
 
+    function getFirstAvailableDoc() {
+      var _found = null;
+      JSON_TAGS.mine.forEach(function(tag){
+        if (_found == null && tag.docs.length > 0){
+          _found = tag.id;
+        }
+      });
+      JSON_TAGS.notmine.forEach(function(tag){
+        tag.projects.forEach(function(project){
+          if (_found == null && project.docs.length > 0){
+            _found = project.id;
+          }
+        });
+      });
+      if (_found != null){
+        return viewModel.getTagById(_found);
+      }
+      return viewModel.history();
+    }
+
     if ($.totalStorage("hueHomeSelectedTag") != null) {
       var _preselectedTag = viewModel.getTagById($.totalStorage("hueHomeSelectedTag"));
       if (_preselectedTag != null) {
@@ -455,7 +504,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
       }
     }
     else {
-      viewModel.filterDocs(viewModel.history());
+      viewModel.filterDocs(getFirstAvailableDoc());
     }
 
     $("#searchInput").jHueDelayedInput(function () {
@@ -483,10 +532,10 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     function handleTypeaheadSelection() {
       if (selectedUserOrGroup != null) {
         if (selectedUserOrGroup.hasOwnProperty("username")) {
-          viewModel.selectedDoc().perms.read.users.push(selectedUserOrGroup);
+          viewModel.selectedDoc().perms[viewModel.selectedPerm()].users.push(selectedUserOrGroup);
         }
         else {
-          viewModel.selectedDoc().perms.read.groups.push(selectedUserOrGroup);
+          viewModel.selectedDoc().perms[viewModel.selectedPerm()].groups.push(selectedUserOrGroup);
         }
         viewModel.selectedDoc.valueHasMutated();
         shareDocFinal();
@@ -557,7 +606,7 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     $("#documentShareModal").modal("show");
   }
 
-  function removeUserShare(user) {
+  function removeUserReadShare(user) {
     $(viewModel.selectedDoc().perms.read.users).each(function (cnt, item) {
       if (item.id == user.id) {
         viewModel.selectedDoc().perms.read.users.splice(cnt, 1);
@@ -567,7 +616,17 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     shareDocFinal();
   }
 
-  function removeGroupShare(group) {
+  function removeUserWriteShare(user) {
+    $(viewModel.selectedDoc().perms.write.users).each(function (cnt, item) {
+      if (item.id == user.id) {
+        viewModel.selectedDoc().perms.write.users.splice(cnt, 1);
+      }
+    });
+    viewModel.selectedDoc.valueHasMutated();
+    shareDocFinal();
+  }
+
+  function removeGroupReadShare(group) {
     $(viewModel.selectedDoc().perms.read.groups).each(function (cnt, item) {
       if (item.id == group.id) {
         viewModel.selectedDoc().perms.read.groups.splice(cnt, 1);
@@ -577,9 +636,27 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
     shareDocFinal();
   }
 
+  function removeGroupWriteShare(group) {
+    $(viewModel.selectedDoc().perms.write.groups).each(function (cnt, item) {
+      if (item.id == group.id) {
+        viewModel.selectedDoc().perms.write.groups.splice(cnt, 1);
+      }
+    });
+    viewModel.selectedDoc.valueHasMutated();
+    shareDocFinal();
+  }
+
+  function changeDocumentSharePerm(perm) {
+    viewModel.selectedPerm(perm);
+  }
+
   function shareDocFinal() {
     var _postPerms = {
       read: {
+        user_ids: [],
+        group_ids: []
+      },
+      write: {
         user_ids: [],
         group_ids: []
       }
@@ -591,6 +668,14 @@ ${ commonheader(_('Welcome Home'), "home", user) | n,unicode }
 
     $(viewModel.selectedDoc().perms.read.groups).each(function (cnt, item) {
       _postPerms.read.group_ids.push(item.id);
+    });
+
+    $(viewModel.selectedDoc().perms.write.users).each(function (cnt, item) {
+      _postPerms.write.user_ids.push(item.id);
+    });
+
+    $(viewModel.selectedDoc().perms.write.groups).each(function (cnt, item) {
+      _postPerms.write.group_ids.push(item.id);
     });
 
     $.post("/desktop/api/doc/update_permissions", {

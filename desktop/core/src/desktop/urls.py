@@ -62,6 +62,7 @@ dynamic_patterns += patterns('desktop.views',
   (r'^desktop/prefs/(?P<key>\w+)?$', 'prefs'),
   (r'^desktop/status_bar/?$', 'status_bar'),
   (r'^desktop/debug/threads$', 'threads'),
+  (r'^desktop/debug/memory$', 'memory'),
   (r'^desktop/debug/who_am_i$', 'who_am_i'),
   (r'^desktop/debug/check_config$', 'check_config'),
   (r'^desktop/debug/check_config_ajax$', 'check_config_ajax'),
@@ -111,6 +112,13 @@ if settings.OAUTH_AUTHENTICATION:
   static_patterns.append((r'^oauth/', include('liboauth.urls')))
   static_patterns.append(static_pattern("liboauth_static",
         os.path.join(os.path.dirname(__file__), "..", '..', '..', "libs/liboauth/src/liboauth/static/")))
+
+# Add indexer app
+if 'search' in [app.name for app in appmanager.DESKTOP_APPS]:
+  namespace = {'namespace': 'indexer', 'app_name': 'indexer'}
+  dynamic_patterns.extend( patterns('', ('^indexer/', include('indexer.urls', **namespace))) )
+  static_patterns.append(static_pattern('indexer/static',
+                                        os.path.join(os.path.dirname(__file__), "..", '..', '..', "libs/indexer/static/")))
 
 # Root each app at /appname if they have a "urls" module
 for app in appmanager.DESKTOP_APPS:

@@ -165,8 +165,7 @@ class DocumentTag(models.Model):
 class DocumentManager(models.Manager):
 
   def documents(self, user):
-    # Check for READ perm only, not write
-    return Document.objects.filter(Q(owner=user) | Q(documentpermission__users=user) | Q(documentpermission__groups__in=user.groups.all())).distinct()
+    return Document.objects.filter(Q(owner=user) | Q(documentpermission__users=user) | Q(documentpermission__groups__in=user.groups.all())).defer('description', 'extra').distinct()
 
   def get_docs(self, user, model_class=None, extra=None):
     docs = Document.objects.documents(user).exclude(name='pig-app-hue-script')
@@ -340,7 +339,7 @@ class DocumentManager(models.Manager):
 
 class Document(models.Model):
   owner = models.ForeignKey(auth_models.User, db_index=True, verbose_name=_t('Owner'), help_text=_t('User who can own the job.'), related_name='doc_owner')
-  name = models.TextField(default='')
+  name = models.CharField(default='', max_length=255)
   description = models.TextField(default='')
 
   last_modified = models.DateTimeField(auto_now=True, db_index=True, verbose_name=_t('Last modified'))
@@ -390,17 +389,15 @@ class Document(models.Model):
   def add_to_history(self):
     tag = DocumentTag.objects.get_history_tag(user=self.owner)
     self.tags.add(tag)
-    #default_tag = DocumentTag.objects.get_default_tag(user=self.owner)
-    #self.tags.remove(default_tag)
 
-  def share_to_default(self):
-    DocumentPermission.objects.share_to_default(self)
+  def share_to_default(self, name='read'):
+    DocumentPermission.objects.share_to_default(self, name=name)
 
   def can_read(self, user):
     return user.is_superuser or self.owner == user or Document.objects.get_docs(user).filter(id=self.id).exists()
 
   def can_write(self, user):
-    return user.is_superuser or self.owner == user
+    return user.is_superuser or self.owner == user or user in self.list_permissions('write').users.all()
 
   def can_read_or_exception(self, user, exception_class=PopupException):
     if self.can_read(user):
@@ -412,12 +409,10 @@ class Document(models.Model):
     if self.can_write(user):
       return True
     else:
-      raise exception_class(_('Only superusers and %s are allowed to modify this document.') % user)
+      raise exception_class(_('Only superusers and %s are allowed to write this document.') % user)
 
   def copy(self, name=None, owner=None):
     copy_doc = self
-
-    tags = self.tags.all() # Don't copy tags
 
     copy_doc.pk = None
     copy_doc.id = None
@@ -427,8 +422,7 @@ class Document(models.Model):
       copy_doc.owner = owner
     copy_doc.save()
 
-    #tags = filter(lambda tag: tag.tag != DocumentTag.EXAMPLE, tags)
-    #if not tags:
+    # Don't copy tags
     default_tag = DocumentTag.objects.get_default_tag(copy_doc.owner)
     tags = [default_tag]
     copy_doc.tags.add(*tags)
@@ -455,10 +449,10 @@ class Document(models.Model):
       elif self.content_type.app_label in apps:
         return apps[self.content_type.app_label].icon_path
       else:
-        return '/static/art/favicon.png'
+        return '/static/art/icon_hue_48.png'
     except Exception, e:
       LOG.warn(force_unicode(e))
-      return '/static/art/favicon.png'
+      return '/static/art/icon_hue_48.png'
 
   def share(self, users, groups, name='read'):
     DocumentPermission.objects.filter(document=self, name=name).update(users=users, groups=groups, add=True)
@@ -480,26 +474,40 @@ class Document(models.Model):
 
       if perm.get('group_ids'):
         groups = auth_models.Group.objects.in_bulk(perm.get('group_ids'))
+      else:
+        groups = []
 
       DocumentPermission.objects.sync(document=self, name=name, users=users, groups=groups)
 
-  def list_permissions(self):
-    return DocumentPermission.objects.list(document=self)
+  def list_permissions(self, perm='read'):
+    return DocumentPermission.objects.list(document=self, perm=perm)
 
 
 class DocumentPermissionManager(models.Manager):
 
-  def share_to_default(self, document):
+  def _check_perm(self, name):
+    perms = (DocumentPermission.READ_PERM, DocumentPermission.WRITE_PERM)
+    if name not in perms:
+      perms_string = ' and '.join(', '.join(perms).rsplit(', ', 1))
+      raise PopupException(_('Only %s permissions are supported, not %s.') % (perms_string, name))
+
+
+  def share_to_default(self, document, name='read'):
     from useradmin.models import get_default_user_group # Remove build dependency
-    perm, created = DocumentPermission.objects.get_or_create(doc=document)
+    
+    self._check_perm(name)
+
+    if name == DocumentPermission.WRITE_PERM:
+      perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=DocumentPermission.WRITE_PERM)
+    else:
+      perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=DocumentPermission.READ_PERM)
     default_group = get_default_user_group()
 
     if default_group:
       perm.groups.add(default_group)
 
   def update(self, document, name='read', users=None, groups=None, add=True):
-    if name != DocumentPermission.READ_PERM:
-      raise PopupException(_('Only %s permissions is supported, not %s.') % (DocumentPermission.READ_PERM, name))
+    self._check_perm(name)
 
     perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=name)
 
@@ -519,8 +527,7 @@ class DocumentPermissionManager(models.Manager):
       perm.delete()
 
   def sync(self, document, name='read', users=None, groups=None):
-    if name != DocumentPermission.READ_PERM:
-      raise PopupException(_('Only %s permissions is supported, not %s.') % (DocumentPermission.READ_PERM, name))
+    self._check_perm(name)
 
     perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=name)
 
@@ -537,12 +544,12 @@ class DocumentPermissionManager(models.Manager):
     if not users and not groups:
       perm.delete()
 
-  def list(self, document):
+  def list(self, document, perm='read'):
     try:
-      perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=DocumentPermission.READ_PERM)
-    except DocumentPermission.MultipleObjectsReturned, ex:
+      perm, created = DocumentPermission.objects.get_or_create(doc=document, perms=perm)
+    except DocumentPermission.MultipleObjectsReturned:
       # We can delete duplicate perms of a document
-      dups = DocumentPermission.objects.filter(doc=document, perms=DocumentPermission.READ_PERM)
+      dups = DocumentPermission.objects.filter(doc=document, perms=perm)
       perm = dups[0]
       for dup in dups[1:]:
         LOG.warn('Deleting duplicate %s' % dup)
@@ -552,12 +559,16 @@ class DocumentPermissionManager(models.Manager):
 
 class DocumentPermission(models.Model):
   READ_PERM = 'read'
+  WRITE_PERM = 'write'
 
   doc = models.ForeignKey(Document)
 
-  users = models.ManyToManyField(auth_models.User, db_index=True)
-  groups = models.ManyToManyField(auth_models.Group, db_index=True)
-  perms = models.TextField(default=READ_PERM, choices=((READ_PERM, 'read'),))
+  users = models.ManyToManyField(auth_models.User, db_index=True, db_table='documentpermission_users')
+  groups = models.ManyToManyField(auth_models.Group, db_index=True, db_table='documentpermission_groups')
+  perms = models.TextField(default=READ_PERM, choices=( # one perm
+    (READ_PERM, 'read'),
+    (WRITE_PERM, 'write'),
+  ))
 
 
   objects = DocumentPermissionManager()

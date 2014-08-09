@@ -76,7 +76,7 @@ def save_design(request, form, type_, design, explicit_save):
   Need to return a SavedQuery because we may end up with a different one.
   Assumes that form.saveform is the SaveForm, and that it is valid.
   """
-  authorized_get_design(request, design.id, owner_only=True)
+  authorized_get_design(request, design.id)
   assert form.saveform.is_valid()
   sub_design_form = form # Beeswax/Impala case
 
@@ -91,22 +91,30 @@ def save_design(request, form, type_, design, explicit_save):
   else:
     raise ValueError(_('Invalid design type %(type)s') % {'type': type_})
 
+  design_obj = design_cls(sub_design_form, query_type=type_)
+  name = form.saveform.cleaned_data['name']
+  desc = form.saveform.cleaned_data['desc']
+
+  return _save_design(request.user, design, type_, design_obj, explicit_save, name, desc)
+
+
+def _save_design(user, design, type_, design_obj, explicit_save, name=None, desc=None):
   # Design here means SavedQuery
   old_design = design
-  design_obj = design_cls(sub_design_form, query_type=type_)
   new_data = design_obj.dumps()
 
   # Auto save if (1) the user didn't click "save", and (2) the data is different.
-  # Don't generate an auto-saved design if the user didn't change anything
-  if explicit_save:
-    design.name = form.saveform.cleaned_data['name']
-    design.desc = form.saveform.cleaned_data['desc']
+  # Create an history design if the user is executing a shared design.
+  # Don't generate an auto-saved design if the user didn't change anything.
+  if explicit_save and (not design.doc.exists() or design.doc.get().can_write_or_exception(user)):
+    design.name = name
+    design.desc = desc
     design.is_auto = False
   elif design_obj != old_design.get_design():
     # Auto save iff the data is different
     if old_design.id is not None:
       # Clone iff the parent design isn't a new unsaved model
-      design = old_design.clone()
+      design = old_design.clone(new_owner=user)
       if not old_design.is_auto:
         design.name = old_design.name + models.SavedQuery.AUTO_DESIGN_SUFFIX
     else:
@@ -175,15 +183,10 @@ def clone_design(request, design_id):
     LOG.error('Cannot clone non-existent design %s' % (design_id,))
     return list_designs(request)
 
-  copy = design.clone()
-  copy_doc = design.doc.get().copy()
-  copy.name = design.name + ' (copy)'
-  copy.owner = request.user
+  copy = design.clone(request.user)
   copy.save()
-
-  copy_doc.owner = copy.owner
-  copy_doc.name = copy.name
-  copy_doc.save()
+  copy_doc = design.doc.get().copy(owner=request.user)
+  copy.doc.all().delete()
   copy.doc.add(copy_doc)
 
   messages.info(request, _('Copied design: %(name)s') % {'name': design.name})
@@ -404,6 +407,7 @@ def execute_query(request, design_id=None, query_history_id=None):
     'query_history': query_history,
     'autocomplete_base_url': reverse(get_app_name(request) + ':api_autocomplete_databases', kwargs={}),
     'can_edit_name': design and design.id and not design.is_auto,
+    'can_edit': design and design.id and design.doc.get().can_write(request.user),
     'action': action,
     'on_success_url': request.GET.get('on_success_url'),
     'has_metastore': 'metastore' in get_apps_dict(request.user)
@@ -460,7 +464,7 @@ def view_results(request, id, first_row=0):
     else:
       results = db.fetch(handle, start_over, 100)
       data = []
-      
+
       # Materialize and HTML escape results
       # TODO: use Number + list comprehension
       for row in results.rows():
@@ -472,7 +476,7 @@ def view_results(request, id, first_row=0):
             escaped_field = 'NULL'
           else:
             field = smart_unicode(field, errors='replace') # Prevent error when getting back non utf8 like charset=iso-8859-1
-            escaped_field = escape(field)
+            escaped_field = escape(field).replace(' ', '&nbsp;')
           escaped_row.append(escaped_field)
         data.append(escaped_row)
 
@@ -630,11 +634,10 @@ def massage_columns_for_json(cols):
     })
   return massaged_cols
 
-
-# owner_only is deprecated
 def authorized_get_design(request, design_id, owner_only=False, must_exist=False):
   if design_id is None and not must_exist:
     return None
+
   try:
     design = SavedQuery.objects.get(id=design_id)
   except SavedQuery.DoesNotExist:
@@ -653,6 +656,7 @@ def authorized_get_design(request, design_id, owner_only=False, must_exist=False
 def authorized_get_query_history(request, query_history_id, owner_only=False, must_exist=False):
   if query_history_id is None and not must_exist:
     return None
+
   try:
     query_history = QueryHistory.get(id=query_history_id)
   except QueryHistory.DoesNotExist:
@@ -862,29 +866,16 @@ def parse_query_context(context):
   return pair
 
 
-HADOOP_JOBS_RE = re.compile("(http[^\s]*/jobdetails.jsp\?jobid=([a-z0-9_]*))")
-HADOOP_YARN_JOBS_RE = re.compile("(http[^\s]*/proxy/([a-z0-9_]+?)/)")
+HADOOP_JOBS_RE = re.compile("Starting Job = ([a-z0-9_]+?),")
 
 def _parse_out_hadoop_jobs(log):
   """
-  Ideally, Hive would tell us what jobs it has run directly
-  from the Thrift interface.  For now, we parse the logs
-  to look for URLs to those jobs.
+  Ideally, Hive would tell us what jobs it has run directly from the Thrift interface.
   """
   ret = []
 
   for match in HADOOP_JOBS_RE.finditer(log):
-    full_job_url, job_id = match.groups()
-    # We ignore full_job_url for now, but it may
-    # come in handy if we support multiple MR clusters
-    # correctly.
-
-    # Ignore duplicates
-    if job_id not in ret:
-      ret.append(job_id)
-
-  for match in HADOOP_YARN_JOBS_RE.finditer(log):
-    full_job_url, job_id = match.groups()
+    job_id = match.group(1)
     if job_id not in ret:
       ret.append(job_id)
 

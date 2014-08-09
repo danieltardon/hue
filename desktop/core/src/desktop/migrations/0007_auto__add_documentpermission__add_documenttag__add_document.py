@@ -2,7 +2,7 @@
 import datetime
 from south.db import db
 from south.v2 import SchemaMigration
-from django.db import models
+from django.db import connection, models
 
 from desktop.models import Document
 
@@ -19,20 +19,20 @@ class Migration(SchemaMigration):
         db.send_create_signal('desktop', ['DocumentPermission'])
 
         # Adding M2M table for field users on 'DocumentPermission'
-        db.create_table('desktop_documentpermission_users', (
+        db.create_table('documentpermission_users', (
             ('id', models.AutoField(verbose_name='ID', primary_key=True, auto_created=True)),
             ('documentpermission', models.ForeignKey(orm['desktop.documentpermission'], null=False)),
             ('user', models.ForeignKey(orm['auth.user'], null=False))
         ))
-        db.create_unique('desktop_documentpermission_users', ['documentpermission_id', 'user_id'])
+        db.create_unique('documentpermission_users', ['documentpermission_id', 'user_id'])
 
         # Adding M2M table for field groups on 'DocumentPermission'
-        db.create_table('desktop_documentpermission_groups', (
+        db.create_table('documentpermission_groups', (
             ('id', models.AutoField(verbose_name='ID', primary_key=True, auto_created=True)),
             ('documentpermission', models.ForeignKey(orm['desktop.documentpermission'], null=False)),
             ('group', models.ForeignKey(orm['auth.group'], null=False))
         ))
-        db.create_unique('desktop_documentpermission_groups', ['documentpermission_id', 'group_id'])
+        db.create_unique('documentpermission_groups', ['documentpermission_id', 'group_id'])
 
         # Adding model 'DocumentTag'
         db.create_table('desktop_documenttag', (
@@ -73,11 +73,25 @@ class Migration(SchemaMigration):
         # Deleting model 'DocumentPermission'
         db.delete_table('desktop_documentpermission')
 
-        # Removing M2M table for field users on 'DocumentPermission'
-        db.delete_table('desktop_documentpermission_users')
+        # Remove old m2m fields
+        try:
+            # Removing M2M table for field users on 'DocumentPermission'
+            db.delete_table('desktop_documentpermission_users')
 
-        # Removing M2M table for field groups on 'DocumentPermission'
-        db.delete_table('desktop_documentpermission_groups')
+            # Removing M2M table for field groups on 'DocumentPermission'
+            db.delete_table('desktop_documentpermission_groups')
+        except:
+            pass
+
+        # Remove new m2m fields
+        try:
+            # Removing M2M table for field users on 'DocumentPermission'
+            db.delete_table('documentpermission_users')
+
+            # Removing M2M table for field groups on 'DocumentPermission'
+            db.delete_table('documentpermission_groups')
+        except:
+            pass
 
         # Deleting model 'DocumentTag'
         db.delete_table('desktop_documenttag')
@@ -142,10 +156,10 @@ class Migration(SchemaMigration):
         'desktop.documentpermission': {
             'Meta': {'object_name': 'DocumentPermission'},
             'doc': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['desktop.Document']"}),
-            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'to': "orm['auth.Group']", 'db_index': 'True', 'symmetrical': 'False'}),
+            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'db_index': 'True', 'to': "orm['auth.Group']", 'null': 'True', 'db_table': "'documentpermission_groups'", 'symmetrical': 'False'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'perms': ('django.db.models.fields.TextField', [], {'default': "'read'"}),
-            'users': ('django.db.models.fields.related.ManyToManyField', [], {'to': "orm['auth.User']", 'db_index': 'True', 'symmetrical': 'False'})
+            'users': ('django.db.models.fields.related.ManyToManyField', [], {'db_index': 'True', 'to': "orm['auth.User']", 'null': 'True', 'db_table': "'documentpermission_users'", 'symmetrical': 'False'})
         },
         'desktop.documenttag': {
             'Meta': {'object_name': 'DocumentTag'},

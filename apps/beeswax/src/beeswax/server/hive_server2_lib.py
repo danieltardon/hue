@@ -21,7 +21,7 @@ import re
 from operator import itemgetter
 
 from desktop.lib import thrift_util
-from desktop.conf import LDAP_PASSWORD
+from desktop.conf import LDAP_PASSWORD, LDAP_USERNAME
 from hadoop import cluster
 
 from TCLIService import TCLIService
@@ -29,7 +29,7 @@ from TCLIService.ttypes import TOpenSessionReq, TGetTablesReq, TFetchResultsReq,
   TStatusCode, TGetResultSetMetadataReq, TGetColumnsReq, TTypeId,\
   TExecuteStatementReq, TGetOperationStatusReq, TFetchOrientation,\
   TCloseSessionReq, TGetSchemasReq, TGetLogReq, TCancelOperationReq,\
-  TCloseOperationReq
+  TCloseOperationReq, TFetchResultsResp, TRowSet
 
 from beeswax import conf as beeswax_conf
 from beeswax import hive_site
@@ -299,7 +299,7 @@ class HiveServerClient:
     self.query_server = query_server
     self.user = user
 
-    use_sasl, mechanism, kerberos_principal_short_name, impersonation_enabled = self.get_security()
+    use_sasl, mechanism, kerberos_principal_short_name, impersonation_enabled, ldap_username, ldap_password = self.get_security()
     LOG.info('use_sasl=%s, mechanism=%s, kerberos_principal_short_name=%s, impersonation_enabled=%s' % (
              use_sasl, mechanism, kerberos_principal_short_name, impersonation_enabled))
 
@@ -314,6 +314,13 @@ class HiveServerClient:
       ssl_enabled = beeswax_conf.SSL.ENABLED.get()
       timeout = beeswax_conf.SERVER_CONN_TIMEOUT.get()
 
+    if ldap_username:
+      username = ldap_username
+      password = ldap_password
+    else:
+      username = user.username
+      password = None
+
     self._client = thrift_util.get_client(TCLIService.Client,
                                           query_server['server_host'],
                                           query_server['server_port'],
@@ -321,7 +328,8 @@ class HiveServerClient:
                                           kerberos_principal=kerberos_principal_short_name,
                                           use_sasl=use_sasl,
                                           mechanism=mechanism,
-                                          username=user.username,
+                                          username=username,
+					                                password=password,
                                           timeout_seconds=timeout,
                                           use_ssl=ssl_enabled,
                                           ca_certs=beeswax_conf.SSL.CACERTS.get(),
@@ -333,6 +341,8 @@ class HiveServerClient:
   def get_security(self):
     principal = self.query_server['principal']
     impersonation_enabled = False
+    ldap_username = None
+    ldap_password = None
 
     if principal:
       kerberos_principal_short_name = principal.split('/', 1)[0]
@@ -351,13 +361,16 @@ class HiveServerClient:
       use_sasl = hive_mechanism in ('KERBEROS', 'NONE')
       mechanism = HiveServerClient.HS2_MECHANISMS[hive_mechanism]
       impersonation_enabled = hive_site.hiveserver2_impersonation_enabled()
+      if LDAP_PASSWORD.get(): # HiveServer2 supports pass-through LDAP authentication.
+        ldap_username = LDAP_USERNAME.get()
+        ldap_password = LDAP_PASSWORD.get()
 
-    return use_sasl, mechanism, kerberos_principal_short_name, impersonation_enabled
+    return use_sasl, mechanism, kerberos_principal_short_name, impersonation_enabled, ldap_username, ldap_password
 
 
   def open_session(self, user):
     kwargs = {
-        'username': user.username, # If SASL, it gets the username from the authentication mechanism" since it dependents on it.
+        'username': user.username, # If SASL or LDAP, it gets the username from the authentication mechanism" since it dependents on it.
         'configuration': {},
     }
 
@@ -369,9 +382,6 @@ class HiveServerClient:
 
     if self.query_server['server_name'] == 'beeswax': # All the time
       kwargs['configuration'].update({'hive.server2.proxy.user': user.username})
-      if LDAP_PASSWORD.get(): # HiveServer2 supports pass-through LDAP authentication.
-        kwargs['username'] = 'hue'
-        kwargs['password'] = LDAP_PASSWORD.get()
 
     req = TOpenSessionReq(**kwargs)
     res = self._client.OpenSession(req)
@@ -429,10 +439,8 @@ class HiveServerClient:
       return res
 
 
-  def close_session(self):
-    session = Session.objects.get_session(self.user, self.query_server['server_name']).get_handle()
-
-    req = TCloseSessionReq(sessionHandle=session)
+  def close_session(self, sessionHandle):
+    req = TCloseSessionReq(sessionHandle=sessionHandle)
     return self._client.CloseSession(req)
 
 
@@ -470,7 +478,7 @@ class HiveServerClient:
       query = 'DESCRIBE %s' % table_name
     else:
       query = 'DESCRIBE EXTENDED %s' % table_name
-    (desc_results, desc_schema), operation_handle = self.execute_statement(query)
+    (desc_results, desc_schema), operation_handle = self.execute_statement(query, max_rows=5000)
     self.close_operation(operation_handle)
 
     return HiveServerTable(table_results.results, table_schema.schema, desc_results.results, desc_schema.schema)
@@ -550,8 +558,11 @@ class HiveServerClient:
 
 
   def fetch_result(self, operation_handle, orientation=TFetchOrientation.FETCH_NEXT, max_rows=1000):
-    fetch_req = TFetchResultsReq(operationHandle=operation_handle, orientation=orientation, maxRows=max_rows)
-    res = self.call(self._client.FetchResults, fetch_req)
+    if operation_handle.hasResultSet:
+      fetch_req = TFetchResultsReq(operationHandle=operation_handle, orientation=orientation, maxRows=max_rows)
+      res = self.call(self._client.FetchResults, fetch_req)
+    else:
+      res = TFetchResultsResp(results=TRowSet(startRowOffset=0, rows=[], columns=[]))
 
     if operation_handle.hasResultSet:
       meta_req = TGetResultSetMetadataReq(operationHandle=operation_handle)
@@ -569,7 +580,8 @@ class HiveServerClient:
 
   def explain(self, query):
     query_statement = query.get_query_statement(0)
-    return self.execute_query_statement('EXPLAIN %s' % query_statement)
+    configuration = self._get_query_configuration(query)
+    return self.execute_query_statement(statement='EXPLAIN %s' % query_statement, configuration=configuration)
 
 
   def get_log(self, operation_handle):
@@ -671,7 +683,6 @@ class HiveServerClientCompatible(object):
   def get_state(self, handle):
     operationHandle = handle.get_rpc_handle()
     res = self._client.get_operation_status(operationHandle)
-
     return HiveServerQueryHistory.STATE_MAP[res.operationState]
 
 
@@ -722,6 +733,11 @@ class HiveServerClientCompatible(object):
     return self._client.close_operation(operationHandle)
 
 
+  def close_session(self, session):
+    operationHandle = session.get_handle()
+    return self._client.close_session(operationHandle)
+
+
   def dump_config(self):
     return 'Does not exist in HS2'
 
@@ -737,7 +753,9 @@ class HiveServerClientCompatible(object):
 
 
   def get_tables(self, database, table_names):
-    return [table['TABLE_NAME'] for table in self._client.get_tables(database, table_names)]
+    tables = [table['TABLE_NAME'] for table in self._client.get_tables(database, table_names)]
+    tables.sort()
+    return tables
 
 
   def get_table(self, database, table_name):

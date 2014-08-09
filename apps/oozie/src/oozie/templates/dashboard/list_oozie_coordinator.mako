@@ -56,7 +56,11 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
         </li>
 
         <li class="nav-header">${ _('Frequency') }</li>
+        % if enable_cron_scheduling:
+        <li class="white cron-frequency"><input class="value" type="hidden" value="${ oozie_coordinator.frequency }"/></li>
+        % else:
         <li class="white">${ oozie_coordinator.frequency } ${ oozie_coordinator.timeUnit }</li>
+        % endif
 
         <li class="nav-header">${ _('Next Materialized Time') }</li>
         <li class="white" id="nextTime">${ utils.format_time(oozie_coordinator.nextMaterializedTime) }</li>
@@ -76,7 +80,7 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
           <li class="white">
             <button title="${_('Kill %(coordinator)s') % dict(coordinator=oozie_coordinator.id)}"
               id="kill-btn"
-              class="btn btn-small confirmationModal
+              class="btn btn-small btn-danger disable-feedback confirmationModal
                % if not oozie_coordinator.is_running():
                  hide
                % endif
@@ -275,7 +279,7 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
       </div>
 
       <div class="tab-pane" id="log">
-        <pre>${ oozie_coordinator.log.decode('utf-8', 'replace') }</pre>
+        <pre></pre>
       </div>
 
       <div class="tab-pane" id="definition">
@@ -338,7 +342,7 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
   </div>
   <div class="modal-footer">
     <a href="#" class="btn" data-dismiss="modal">${_('No')}</a>
-    <a class="btn btn-danger" href="javascript:void(0);">${_('Yes')}</a>
+    <a class="btn btn-danger disable-feedback" href="javascript:void(0);">${_('Yes')}</a>
   </div>
 </div>
 
@@ -357,6 +361,10 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
 <script src="/static/js/jquery.blueprint.js"></script>
 % endif
 
+% if enable_cron_scheduling:
+<link href="/static/css/jqCron.css" rel="stylesheet" type="text/css" />
+<script src="/static/js/jqCron.js" type="text/javascript"></script>
+% endif
 
 <style type="text/css">
   .CodeMirror.cm-s-default {
@@ -433,6 +441,11 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
 
     $("*[rel=tooltip]").tooltip();
 
+    % if enable_cron_scheduling:
+      ${ utils.cron_js() }
+      renderCrons();
+    % endif
+
     $(".dataset").each(function () {
       if ($(this).text().length > 15) {
         $(this).html($(this).text().substr(0, 14) + "&hellip;");
@@ -486,6 +499,8 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
       $("#confirmation").modal("show");
       $("#confirmation a.btn-danger").click(function() {
         _this.trigger('confirmation');
+        $(this).attr("data-loading-text", $(this).text() + " ...");
+        $(this).button("loading");
       });
     });
 
@@ -496,6 +511,7 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Problem: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -511,6 +527,7 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Error: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -531,10 +548,26 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
 
     resizeLogs();
     refreshView();
+    refreshLogs();
+
     var logsAtEnd = true;
+    function refreshLogs() {
+      $.getJSON("${ url('oozie:get_oozie_job_log', job_id=oozie_coordinator.id) }", function (data) {
+        var _logsEl = $("#log pre");
+        _logsEl.text(data.log);
+
+        if (logsAtEnd) {
+          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
+        }
+        if (data.status != "RUNNING" && data.status != "PREP"){
+          return;
+        }
+        window.setTimeout(refreshLogs, 20000);
+      });
+    }
 
     function refreshView() {
-      $.getJSON("${ oozie_coordinator.get_absolute_url(oozie_bundle) }" + "?format=json" + "${ "&show_all_actions=true" if show_all_actions else '' | n,unicode }", function (data) {
+      $.getJSON("${ oozie_coordinator.get_absolute_url(oozie_bundle=oozie_bundle, format='json') }" + "${ "&show_all_actions=true" if show_all_actions else '' | n,unicode }", function (data) {
         viewModel.isLoading(false);
         if (data.actions){
           viewModel.actions(ko.utils.arrayMap(data.actions, function (action) {
@@ -567,16 +600,10 @@ ${ layout.menubar(section='coordinators', dashboard=True) }
 
         $("#progress .bar").text(data.progress + "%").css("width", data.progress + "%").attr("class", "bar " + getStatusClass(data.status, "bar-"));
 
-        var _logsEl = $("#log pre");
-        _logsEl.text(data.log);
-
-        if (logsAtEnd) {
-          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
-        }
         if (data.status != "RUNNING" && data.status != "PREP"){
           return;
         }
-        window.setTimeout(refreshView, 20000);
+        window.setTimeout(refreshView, 5000);
       });
     }
 

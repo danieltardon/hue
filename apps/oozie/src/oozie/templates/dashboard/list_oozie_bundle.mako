@@ -78,7 +78,7 @@ ${ layout.menubar(section='bundles', dashboard=True) }
           <li class="white">
             <button title="${_('Kill %(bundle)s') % dict(bundle=oozie_bundle.id)}"
               id="kill-btn"
-              class="btn btn-small confirmationModal
+              class="btn btn-small btn-danger disable-feedback confirmationModal
                % if not oozie_bundle.is_running():
                  hide
                % endif
@@ -151,12 +151,12 @@ ${ layout.menubar(section='bundles', dashboard=True) }
           </tbody>
           <tfoot>
             <tr data-bind="visible: isLoading()">
-              <td colspan="2" class="left">
+              <td colspan="3" class="left">
                 <img src="/static/art/spinner.gif" />
               </td>
             </tr>
             <tr data-bind="visible: actions().length == 0 && !isLoading()">
-              <td colspan="2">
+              <td colspan="3">
                 <div class="alert">
                   ${ _('There are no actions to be shown.') }
                 </div>
@@ -261,7 +261,7 @@ ${ layout.menubar(section='bundles', dashboard=True) }
       </div>
 
       <div class="tab-pane" id="log">
-        <pre>${ oozie_bundle.log.decode('utf-8', 'replace') }</pre>
+        <pre></pre>
       </div>
 
       <div class="tab-pane" id="definition">
@@ -289,7 +289,7 @@ ${ layout.menubar(section='bundles', dashboard=True) }
   </div>
   <div class="modal-footer">
     <a href="#" class="btn" data-dismiss="modal">${_('No')}</a>
-    <a class="btn btn-danger" href="javascript:void(0);">${_('Yes')}</a>
+    <a class="btn btn-danger disable-feedback" href="javascript:void(0);">${_('Yes')}</a>
   </div>
 </div>
 
@@ -379,6 +379,8 @@ ${ layout.menubar(section='bundles', dashboard=True) }
       $("#confirmation").modal("show");
       $("#confirmation a.btn-danger").click(function() {
         _this.trigger('confirmation');
+        $(this).attr("data-loading-text", $(this).text() + " ...");
+        $(this).button("loading");
       });
     });
 
@@ -389,6 +391,7 @@ ${ layout.menubar(section='bundles', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Problem: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -404,6 +407,7 @@ ${ layout.menubar(section='bundles', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Error: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -424,10 +428,26 @@ ${ layout.menubar(section='bundles', dashboard=True) }
 
     resizeLogs();
     refreshView();
+    refreshLogs();
+
     var logsAtEnd = true;
+    function refreshLogs() {
+      $.getJSON("${ url('oozie:get_oozie_job_log', job_id=oozie_bundle.id) }", function (data) {
+        var _logsEl = $("#log pre");
+        _logsEl.text(data.log);
+
+        if (logsAtEnd) {
+          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
+        }
+        if (data.status != "RUNNING" && data.status != "PREP"){
+          return;
+        }
+        window.setTimeout(refreshLogs, 20000);
+      });
+    }
 
     function refreshView() {
-      $.getJSON("${ oozie_bundle.get_absolute_url() }" + "?format=json", function (data) {
+      $.getJSON("${ oozie_bundle.get_absolute_url(format='json') }", function (data) {
         viewModel.isLoading(false);
         if (data.actions){
           viewModel.actions(ko.utils.arrayMap(data.actions, function (action) {
@@ -465,17 +485,10 @@ ${ layout.menubar(section='bundles', dashboard=True) }
 
         $("#progress .bar").text(data.progress + "%").css("width", data.progress + "%").attr("class", "bar " + getStatusClass(data.status, "bar-"));
 
-        var _logsEl = $("#log pre");
-        _logsEl.text(data.log);
-
-        if (logsAtEnd) {
-          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
-        }
-
         if (data.status != "RUNNING" && data.status != "PREP"){
           return;
         }
-        window.setTimeout(refreshView, 20000);
+        window.setTimeout(refreshView, 5000);
       });
     }
 

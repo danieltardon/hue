@@ -52,7 +52,7 @@ ${ components.menubar() }
         <a class="btn btn-status btn-success" data-value="completed">${ _('Succeeded') }</a>
         <a class="btn btn-status btn-warning" data-value="running">${ _('Running') }</a>
         <a class="btn btn-status btn-danger disable-feedback" data-value="failed">${ _('Failed') }</a>
-        <a class="btn btn-status btn-danger disable-feedback" data-value="killed">${ _('Killed') }</a>
+        <a class="btn btn-status btn-inverse disable-feedback" data-value="killed">${ _('Killed') }</a>
       </span>
     </%def>
   </%actionbar:render>
@@ -72,7 +72,7 @@ ${ components.menubar() }
       <th>${_('Queue')}</th>
       <th>${_('Priority')}</th>
       <th>${_('Duration')}</th>
-      <th>${_('Date')}</th>
+      <th>${_('Submitted')}</th>
       <th data-row-selector-exclude="true"></th>
     </tr>
     </thead>
@@ -110,7 +110,7 @@ ${ components.menubar() }
       "bAutoWidth": false,
       "sDom": "<'row'r>t<'row-fluid'<'dt-pages'p><'dt-records'i>>",
       "aaSorting": [
-        [1, "desc"]
+        [10, "desc"]
       ],
       "bProcessing": true,
       "bDeferRender": true,
@@ -137,7 +137,7 @@ ${ components.menubar() }
     $(document).ajaxError(function (event, jqxhr, settings, exception) {
       if (jqxhr.status == 500) {
         window.clearInterval(_runningInterval);
-        $(document).trigger("error", "${_('There was a problem communicating with the server. Refresh the page.')}");
+        $(document).trigger("error", "${_('There was a problem communicating with the server: ')}" + $.parseJSON(jqxhr.responseText).message);
       }
     });
 

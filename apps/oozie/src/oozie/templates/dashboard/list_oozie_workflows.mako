@@ -59,15 +59,13 @@ ${ layout.menubar(section='workflows', dashboard=True) }
     <table class="table table-condensed" id="running-table">
       <thead>
         <tr>
-          <th width="12%">${ _('Submission') }</th>
+          <th width="15%">${ _('Submission') }</th>
           <th width="5%">${ _('Status') }</th>
-          <th width="20%">${ _('Name') }</th>
-          <th width="5%">${ _('Progress') }</th>
-          <th width="5%">${ _('Submitter') }</th>
-          <th width="13%">${ _('Created') }</th>
-          <th width="13%">${ _('Last Modified') }</th>
-          <th width="2%">${ _('Run') }</th>
-          <th width="15%">${ _('Id') }</th>
+          <th width="21%">${ _('Name') }</th>
+          <th width="7%">${ _('Progress') }</th>
+          <th width="7%">${ _('Submitter') }</th>
+          <th width="15%">${ _('Last Modified') }</th>
+          <th width="20%">${ _('Id') }</th>
           <th width="10%">${ _('Action') }</th>
         </tr>
       </thead>
@@ -83,14 +81,12 @@ ${ layout.menubar(section='workflows', dashboard=True) }
     <table class="table table-condensed" id="completed-table" data-tablescroller-disable="true">
       <thead>
         <tr>
-          <th width="12%">${ _('Completion') }</th>
-          <th width="5%">${ _('Status') }</th>
+          <th width="15%">${ _('Completion') }</th>
+          <th width="7%">${ _('Status') }</th>
           <th width="25%">${ _('Name') }</th>
-          <th width="5%">${ _('Duration') }</th>
-          <th width="5%">${ _('Submitter') }</th>
-          <th width="13%">${ _('Created') }</th>
-          <th width="13%">${ _('Last Modified') }</th>
-          <th width="2%">${ _('Run') }</th>
+          <th width="7%">${ _('Duration') }</th>
+          <th width="10%">${ _('Submitter') }</th>
+          <th width="15%">${ _('Last Modified') }</th>
           <th width="25%">${ _('Id') }</th>
         </tr>
       </thead>
@@ -111,7 +107,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
   </div>
   <div class="modal-footer">
     <a href="#" class="btn" data-dismiss="modal">${_('No')}</a>
-    <a class="btn btn-danger" href="javascript:void(0);">${_('Yes')}</a>
+    <a class="btn btn-danger disable-feedback" href="javascript:void(0);">${_('Yes')}</a>
   </div>
 </div>
 
@@ -152,11 +148,9 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         { "sType":"date" },
         null,
         null,
+        null,
+        null,
         { "sSortDataType":"dom-sort-value", "sType":"numeric" },
-        null,
-        null,
-        null,
-        null,
         null,
         { "bSortable":false }
       ],
@@ -190,11 +184,9 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         { "sType":"date" },
         null,
         null,
+        null,
+        null,
         { "sSortDataType":"dom-sort-value", "sType":"numeric" },
-        null,
-        null,
-        null,
-        null,
         null
       ],
       "aaSorting":[
@@ -291,21 +283,24 @@ ${ layout.menubar(section='workflows', dashboard=True) }
       _this.bind("confirmation", function () {
         var _this = this;
         $.post($(this).attr("data-url"),
-                { "notification":$(this).attr("data-message") },
-                function (response) {
-                  if (response["status"] != 0) {
-                    $(document).trigger("error", "${ _('Problem: ') }" + response["data"]);
-                  } else {
-                    window.location.reload();
-                  }
-                }
+          { "notification":$(this).attr("data-message") },
+          function (response) {
+            if (response["status"] != 0) {
+              $(document).trigger("error", "${ _('Problem: ') }" + response["data"]);
+              $("#confirmation a.btn-danger").button("reset");
+            } else {
+              window.location.reload();
+            }
+          }
         );
         return false;
       });
       $("#confirmation .message").text(_this.attr("data-confirmation-message"));
       $("#confirmation").modal("show");
-      $("#confirmation a.btn-danger").click(function () {
+      $("#confirmation a.btn-danger").on("click", function () {
         _this.trigger("confirmation");
+        $(this).attr("data-loading-text", $(this).text() + " ...");
+        $(this).button("loading");
       });
     });
 
@@ -345,7 +340,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
             var suspendCell = "";
             var resumeCell = "";
             if (wf.canEdit) {
-              killCell = '<a class="btn btn-small confirmationModal" ' +
+              killCell = '<a class="btn btn-mini btn-danger disable-feedback confirmationModal" ' +
                       'href="javascript:void(0)" ' +
                       'data-url="' + wf.killUrl + '" ' +
                       'title="${ _('Kill') } ' + wf.id + '"' +
@@ -353,7 +348,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
                       'data-message="${ _('The workflow was killed!') }" ' +
                       'data-confirmation-message="${ _('Are you sure you\'d like to kill this job?') }"' +
                       '>${ _('Kill') }</a>';
-              suspendCell = '<a class="btn btn-small confirmationModal" ' +
+              suspendCell = '<a class="btn btn-mini confirmationModal" ' +
                       'href="javascript:void(0)" ' +
                       'data-url="' + wf.suspendUrl + '" ' +
                       'title="${ _('Suspend') } ' + wf.id + '"' +
@@ -361,7 +356,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
                       'data-message="${ _('The workflow was suspended!') }" ' +
                       'data-confirmation-message="${ _('Are you sure you\'d like to suspend this job?') }"' +
                       '>${ _('Suspend') }</a>';
-              resumeCell = '<a class="btn btn-small confirmationModal" ' +
+              resumeCell = '<a class="btn btn-mini confirmationModal" ' +
                       'href="javascript:void(0)" ' +
                       'data-url="' + wf.resumeUrl + '" ' +
                       'title="${ _('Resume') } ' + wf.id + '"' +
@@ -379,11 +374,9 @@ ${ layout.menubar(section='workflows', dashboard=True) }
                     wf.appName,
                     '<div class="progress"><div class="' + wf.progressClass + '" style="width:' + wf.progress + '%">' + wf.progress + '%</div></div>',
                     wf.user,
-                    emptyStringIfNull(wf.created),
                     emptyStringIfNull(wf.lastModTime),
-                    wf.run,
                     '<a href="' + wf.absoluteUrl + '" data-row-selector="true">' + wf.id + '</a>',
-                    killCell + " " + (['RUNNING', 'PREP', 'WAITING'].indexOf(wf.status) > -1?suspendCell:resumeCell)
+                    killCell + " " + (['RUNNING', 'PREP', 'WAITING'].indexOf(wf.status) > -1 ? suspendCell : resumeCell)
                   ]);
                 }
                 catch (error) {
@@ -394,7 +387,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
             else {
               runningTable.fnUpdate('<span class="' + wf.statusClass + '">' + wf.status + '</span>', foundRow, 1, false);
               runningTable.fnUpdate('<div class="progress"><div class="' + wf.progressClass + '" style="width:' + wf.progress + '%">' + wf.progress + '%</div></div>', foundRow, 3, false);
-              runningTable.fnUpdate(killCell + " " + (['RUNNING', 'PREP', 'WAITING'].indexOf(wf.status) > -1?suspendCell:resumeCell), foundRow, 9, false);
+              runningTable.fnUpdate(killCell + " " + (['RUNNING', 'PREP', 'WAITING'].indexOf(wf.status) > -1?suspendCell:resumeCell), foundRow, 7, false);
             }
           });
         }
@@ -422,9 +415,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
               '<span class="' + wf.statusClass + '">' + wf.status + '</span>', decodeURIComponent(wf.appName),
               emptyStringIfNull(wf.duration),
               wf.user,
-              emptyStringIfNull(wf.created),
               emptyStringIfNull(wf.lastModTime),
-              wf.run,
               '<a href="' + wf.absoluteUrl + '" data-row-selector="true">' + wf.id + '</a>'
             ], false);
           }

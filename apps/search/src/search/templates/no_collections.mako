@@ -17,7 +17,6 @@
 <%!
 from desktop.views import commonheader, commonfooter
 from django.utils.translation import ugettext as _
-import urllib
 %>
 
 <%namespace name="macros" file="macros.mako" />
@@ -45,7 +44,20 @@ ${ commonheader(_('Search'), "search", user, "120px") | n,unicode }
 
       <i class="fa fa-search waiting"></i>
       <h1>${ _('It seems there is nothing to search on ...') }</h1>
-
+      % if user.is_superuser:
+      <h1>
+        ${ _('... First create a search dashboard with ') }
+        <a class="btn importBtn" href="${ url('search:new_search') }">
+          <i class="fa fa-file-o"></i> ${ _('Dashboard') }
+        </a>
+      </h1>
+      <h1>
+        ${ _('... or create a search index with ') }
+        <a class="btn importBtn" href="${ url('indexer:collections') }">
+          <i class="fa fa-database"></i> ${ _('Indexer') }
+        </a>
+      </h1>
+      % endif
     </div>
   </div>
 </div>

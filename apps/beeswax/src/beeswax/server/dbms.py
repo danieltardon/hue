@@ -151,13 +151,13 @@ class HiveServer2Dbms(object):
 
 
   def close_operation(self, query_handle):
-    if self.server_type == BEESWAX:
-      raise PopupException(_('%s interface does not support close_operation. %s interface does.') % (BEESWAX, HIVE_SERVER2))
-
     return self.client.close_operation(query_handle)
 
   def open_session(self, user):
     return self.client.open_session(user)
+
+  def close_session(self, session):
+    return self.client.close_session(session)
 
   def cancel_operation(self, query_handle):
     resp = self.client.cancel_operation(query_handle)
@@ -348,12 +348,18 @@ class HiveServer2Dbms(object):
     handle = self.client.query(query)
     curr = time.time()
     end = curr + timeout_sec
+
     while curr <= end:
       state = self.client.get_state(handle)
       if state not in (QueryHistory.STATE.running, QueryHistory.STATE.submitted):
         return handle
       time.sleep(sleep_interval)
       curr = time.time()
+
+    try:
+      self.cancel_operation(handle)
+    except:
+      self.close_operation(handle)
     return None
 
 

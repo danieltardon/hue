@@ -224,7 +224,7 @@ class Job(models.Model):
 
   def is_editable(self, user):
     """Only owners or admins can modify a job."""
-    return user.is_superuser or self.owner == user
+    return user.is_superuser or self.owner == user or self.doc.get().can_write(user)
 
   @property
   def data_dict(self):
@@ -340,7 +340,7 @@ class Workflow(Job):
   objects = WorkflowManager()
 
   HUE_ID = 'hue-id-w'
-  ICON = '/oozie/static/art/icon_oozie_workflow_24.png'
+  ICON = '/oozie/static/art/icon_oozie_workflow_48.png'
   METADATA_FORMAT_VERSION = "0.0.1"
 
   def get_type(self):
@@ -1416,7 +1416,7 @@ class Coordinator(Job):
                                     help_text=_t('Additional properties to transmit to the workflow, e.g. limit=100, and EL functions, e.g. username=${coord:user()}'))
 
   HUE_ID = 'hue-id-c'
-  ICON = '/oozie/static/art/icon_oozie_coordinator_24.png'
+  ICON = '/oozie/static/art/icon_oozie_coordinator_48.png'
   METADATA_FORMAT_VERSION = "0.0.1"
 
   def get_type(self):
@@ -1750,7 +1750,7 @@ class Bundle(Job):
   coordinators = models.ManyToManyField(Coordinator, through='BundledCoordinator')
 
   HUE_ID = 'hue-id-b'
-  ICON = '/oozie/static/art/icon_oozie_bundle_24.png'
+  ICON = '/oozie/static/art/icon_oozie_bundle_48.png'
   METADATA_FORMAT_VERSION = '0.0.1'
 
   def get_type(self):
@@ -1908,7 +1908,7 @@ class History(models.Model):
       pass
 
   @classmethod
-  def cross_reference_submission_history(cls, user, oozie_id, coordinator_job_id):
+  def cross_reference_submission_history(cls, user, oozie_id):
     # Try do get the history
     history = None
     try:

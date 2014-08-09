@@ -34,13 +34,13 @@ LOG = logging.getLogger(__name__)
 
 
 def _get_docs(user):
-  history_tag = DocumentTag.objects.get_history_tag(user)  
+  history_tag = DocumentTag.objects.get_history_tag(user)
   trash_tag = DocumentTag.objects.get_trash_tag(user)
   docs = itertools.chain(
-      Document.objects.get_docs(user).exclude(tags__in=[trash_tag]).filter(tags__in=[history_tag]).order_by('-last_modified')[:500],
-      Document.objects.get_docs(user).exclude(tags__in=[history_tag]).order_by('-last_modified')[:100]
+      Document.objects.get_docs(user).exclude(tags__in=[trash_tag]).filter(tags__in=[history_tag]).select_related('DocumentTag', 'User', 'DocumentPermission').order_by('-last_modified')[:500],
+      Document.objects.get_docs(user).exclude(tags__in=[history_tag]).select_related('DocumentTag', 'User', 'DocumentPermission').order_by('-last_modified')[:100]
   )
-  return list(docs)  
+  return list(docs)
 
 
 def massaged_tags_for_json(docs, user):
@@ -84,6 +84,10 @@ def massaged_tags_for_json(docs, user):
       sharers[tag.owner].append(massaged_tag)
 
   ts['notmine'] = [{'name': sharer.username, 'projects': projects} for sharer, projects in sharers.iteritems()]
+  # Remove from my tags the trashed and history ones
+  mine_filter = set(ts['trash']['docs'] + ts['history']['docs'])
+  for tag in ts['mine']:
+    tag['docs'] = [doc_id for doc_id in tag['docs'] if doc_id not in mine_filter]
 
   return ts
 
@@ -128,7 +132,8 @@ def massaged_documents_for_json(documents, user):
   docs = {}
 
   for document in documents:
-    perms = document.list_permissions()
+    read_perms = document.list_permissions(perm='read')
+    write_perms = document.list_permissions(perm='write')
     docs[document.id] = {
       'id': document.id,
       'contentType': document.content_type.name,
@@ -139,8 +144,12 @@ def massaged_documents_for_json(documents, user):
       'tags': [{'id': tag.id, 'name': tag.tag} for tag in document.tags.all()],
       'perms': {
         'read': {
-          'users': [{'id': friends.id, 'username': friends.username} for friends in perms.users.all()],
-          'groups': [{'id': group.id, 'name': group.name} for group in perms.groups.all()]
+          'users': [{'id': perm_user.id, 'username': perm_user.username} for perm_user in read_perms.users.all()],
+          'groups': [{'id': perm_group.id, 'name': perm_group.name} for perm_group in read_perms.groups.all()]
+        },
+        'write': {
+          'users': [{'id': perm_user.id, 'username': perm_user.username} for perm_user in write_perms.users.all()],
+          'groups': [{'id': perm_group.id, 'name': perm_group.name} for perm_group in write_perms.groups.all()]
         }
       },
       'owner': document.owner.username,
@@ -153,7 +162,8 @@ def massaged_documents_for_json(documents, user):
 
 
 def massage_doc_for_json(doc, user):
-  perms = doc.list_permissions()
+  read_perms = doc.list_permissions(perm='read')
+  write_perms = doc.list_permissions(perm='write')
   return {
       'id': doc.id,
       'contentType': doc.content_type.name,
@@ -164,8 +174,12 @@ def massage_doc_for_json(doc, user):
       'tags': [{'id': tag.id, 'name': tag.tag} for tag in doc.tags.all()],
       'perms': {
         'read': {
-          'users': [{'id': perm_user.id, 'username': perm_user.username} for perm_user in perms.users.all()],
-          'groups': [{'id': perm_group.id, 'name': perm_group.name} for perm_group in perms.groups.all()]
+          'users': [{'id': perm_user.id, 'username': perm_user.username} for perm_user in read_perms.users.all()],
+          'groups': [{'id': perm_group.id, 'name': perm_group.name} for perm_group in read_perms.groups.all()]
+        },
+        'write': {
+          'users': [{'id': perm_user.id, 'username': perm_user.username} for perm_user in write_perms.users.all()],
+          'groups': [{'id': perm_group.id, 'name': perm_group.name} for perm_group in write_perms.groups.all()]
         }
       },
       'owner': doc.owner.username,
@@ -257,6 +271,7 @@ def update_permissions(request):
       response['status'] = 0
       response['doc'] = massage_doc_for_json(doc, request.user)
     except Exception, e:
+      LOG.exception(e.message)
       response['message'] = force_unicode(e)
   else:
     response['message'] = _('POST request only')

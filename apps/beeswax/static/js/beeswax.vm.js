@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 function BeeswaxViewModel(server) {
   var self = this;
 
@@ -360,21 +359,6 @@ function BeeswaxViewModel(server) {
     }
   };
 
-  self.fetchDatabases = function() {
-    var request = {
-      url: '/' + self.server() + '/api/autocomplete',
-      dataType: 'json',
-      type: 'GET',
-      success: function(data) {
-        self.updateDatabases(data.databases);
-        $(document).trigger('fetched.databases', [data]);
-      },
-      error: error_fn,
-      cache: false
-    };
-    $.ajax(request);
-  };
-
   self.fetchDesign = function() {
     $(document).trigger('fetch.design');
 
@@ -618,7 +602,7 @@ function BeeswaxViewModel(server) {
         var failed = data.isFailure  || data.status != 0;
         if (data.isSuccess || failed) {
           clearTimeout(timer);
-
+          self.design.isRunning(false);
           if (data.log) {
             self.design.watch.logs(data.log.split("\n"));
             // scroll logs
@@ -657,9 +641,10 @@ function BeeswaxViewModel(server) {
     self.design.results.errors.removeAll();
     var request = {
       url: self.design.results.url(),
-      dataType: 'json',
+      dataType: 'text',
       type: 'GET',
       success: function(data) {
+        data = JSON.bigdataParse(data);
         if (data.error) {
           self.design.results.errors.push(data.message);
           self.design.isRunning(false);

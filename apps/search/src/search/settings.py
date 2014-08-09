@@ -13,10 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-DJANGO_APPS = [ "search" ]
+
+DJANGO_APPS = ["search"]
 NICE_NAME = "Solr Search"
 MENU_INDEX = 42
-ICON = "/search/static/art/icon_search_24.png"
+ICON = "/search/static/art/icon_search_48.png"
 
 REQUIRES_HADOOP = False
 IS_URL_NAMESPACED = True

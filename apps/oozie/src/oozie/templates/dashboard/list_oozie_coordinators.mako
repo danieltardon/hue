@@ -63,8 +63,12 @@ ${layout.menubar(section='coordinators', dashboard=True)}
           <th width="20%">${ _('Name') }</th>
           <th width="5%">${ _('Progress') }</th>
           <th width="10%">${ _('Submitter') }</th>
+          % if enable_cron_scheduling:
+          <th width="8%">${ _('Frequency') }</th>
+          % else:
           <th width="3%">${ _('Frequency') }</th>
           <th width="5%">${ _('Time Unit') }</th>
+          % endif
           <th width="12%">${ _('Start Time') }</th>
           <th width="15%">${ _('Id') }</th>
           <th width="10%">${ _('Action') }</th>
@@ -86,8 +90,12 @@ ${layout.menubar(section='coordinators', dashboard=True)}
           <th width="20%">${ _('Name') }</th>
           <th width="10%">${ _('Duration') }</th>
           <th width="10%">${ _('Submitter') }</th>
+          % if enable_cron_scheduling:
+          <th width="10%">${ _('Frequency') }</th>
+          % else:
           <th width="5%">${ _('Frequency') }</th>
           <th width="5%">${ _('Time Unit') }</th>
+          % endif
           <th width="13%">${ _('Start Time') }</th>
           <th width="20%">${ _('Id') }</th>
         </tr>
@@ -110,12 +118,17 @@ ${layout.menubar(section='coordinators', dashboard=True)}
   </div>
   <div class="modal-footer">
     <a href="#" class="btn" data-dismiss="modal">${_('No')}</a>
-    <a class="btn btn-danger" href="javascript:void(0);">${_('Yes')}</a>
+    <a class="btn btn-danger disable-feedback" href="javascript:void(0);">${_('Yes')}</a>
   </div>
 </div>
 
 <script src="/oozie/static/js/bundles.utils.js" type="text/javascript" charset="utf-8"></script>
 <script src="/static/ext/js/datatables-paging-0.1.js" type="text/javascript" charset="utf-8"></script>
+
+% if enable_cron_scheduling:
+<link href="/static/css/jqCron.css" rel="stylesheet" type="text/css" />
+<script src="/static/js/jqCron.js" type="text/javascript"></script>
+% endif
 
 <script type="text/javascript" charset="utf-8">
 
@@ -123,6 +136,7 @@ ${layout.menubar(section='coordinators', dashboard=True)}
     return {
       id: c.id,
       endTime: c.endTime,
+      nextMaterializedTime: c.nextMaterializedTime,
       status: c.status,
       statusClass: "label " + getStatusClass(c.status),
       isRunning: c.isRunning,
@@ -156,12 +170,14 @@ ${layout.menubar(section='coordinators', dashboard=True)}
         null,
         null,
         null,
+        % if not enable_cron_scheduling:
         null,
+        % endif
         null,
         { "bSortable":false }
       ],
       "aaSorting":[
-        [ 5, "desc" ]
+        [ 0, "desc" ]
       ],
       "oLanguage":{
         "sEmptyTable":"${_('No data available')}",
@@ -194,11 +210,13 @@ ${layout.menubar(section='coordinators', dashboard=True)}
         null,
         null,
         null,
+        % if not enable_cron_scheduling:
         null,
+        % endif
         null
       ],
       "aaSorting":[
-        [ 5, "desc" ]
+        [ 0, "desc" ]
       ],
       "oLanguage":{
         "sEmptyTable":"${_('No data available')}",
@@ -296,14 +314,15 @@ ${layout.menubar(section='coordinators', dashboard=True)}
       _this.bind("confirmation", function () {
         var _this = this;
         $.post($(this).attr("data-url"),
-                { "notification":$(this).attr("data-message") },
-                function (response) {
-                  if (response["status"] != 0) {
-                    $(document).trigger("error", "${ _('Problem: ') }" + response["data"]);
-                  } else {
-                    window.location.reload();
-                  }
-                }
+          { "notification":$(this).attr("data-message") },
+          function (response) {
+            if (response["status"] != 0) {
+              $(document).trigger("error", "${ _('Problem: ') }" + response["data"]);
+              $("#confirmation a.btn-danger").button("reset");
+            } else {
+              window.location.reload();
+            }
+          }
         );
         return false;
       });
@@ -311,8 +330,15 @@ ${layout.menubar(section='coordinators', dashboard=True)}
       $("#confirmation").modal("show");
       $("#confirmation a.btn-danger").click(function () {
         _this.trigger("confirmation");
+        $(this).attr("data-loading-text", $(this).text() + " ...");
+        $(this).button("loading");
       });
     });
+
+    % if enable_cron_scheduling:
+    ${ utils.cron_js() }
+    % endif
+
 
     refreshRunning();
     refreshCompleted();
@@ -350,7 +376,7 @@ ${layout.menubar(section='coordinators', dashboard=True)}
             var suspendCell = "";
             var resumeCell = "";
             if (coord.canEdit) {
-              killCell = '<a class="btn btn-small confirmationModal" ' +
+              killCell = '<a class="btn btn-mini btn-danger disable-feedback confirmationModal" ' +
                       'href="javascript:void(0)" ' +
                       'data-url="' + coord.killUrl + '" ' +
                       'title="${ _('Kill') } ' + coord.id + '"' +
@@ -379,13 +405,17 @@ ${layout.menubar(section='coordinators', dashboard=True)}
               if (['RUNNING', 'PREP', 'WAITING', 'SUSPENDED', 'PREPSUSPENDED', 'PREPPAUSED', 'PAUSED', 'STARTED', 'FINISHING'].indexOf(coord.status) > -1) {
                 try {
                   runningTable.fnAddData([
-                    emptyStringIfNull(coord.endTime),
+                    emptyStringIfNull(coord.nextMaterializedTime),
                     '<span class="' + coord.statusClass + '">' + coord.status + '</span>',
                     coord.appName,
                     '<div class="progress"><div class="' + coord.progressClass + '" style="width:' + coord.progress + '%">' + coord.progress + '%</div></div>',
                     coord.user,
+                    % if enable_cron_scheduling:
+                    '<div class="cron-frequency"><input class="value" type="hidden" value="'+emptyStringIfNull(coord.frequency)+'"/></div>',
+                    % else:
                     emptyStringIfNull(coord.frequency),
                     emptyStringIfNull(coord.timeUnit),
+                    % endif
                     emptyStringIfNull(coord.startTime),
                     '<a href="' + coord.absoluteUrl + '" data-row-selector="true">' + coord.id + '</a>',
                     killCell + " " + (['RUNNING', 'PREP', 'WAITING'].indexOf(coord.status) > -1?suspendCell:resumeCell)
@@ -411,7 +441,9 @@ ${layout.menubar(section='coordinators', dashboard=True)}
           refreshCompleted();
         }
         numRunning = data.length;
-
+        % if enable_cron_scheduling:
+        renderCrons(); // utils.inc.mako
+        % endif
         window.setTimeout(refreshRunning, 20000);
       });
     }
@@ -428,8 +460,12 @@ ${layout.menubar(section='coordinators', dashboard=True)}
               coord.appName,
               emptyStringIfNull(coord.duration),
               coord.user,
+              % if enable_cron_scheduling:
+              '<div class="cron-frequency"><input class="value" type="hidden" value="'+emptyStringIfNull(coord.frequency)+'"/></div>',
+              % else:
               emptyStringIfNull(coord.frequency),
               emptyStringIfNull(coord.timeUnit),
+              % endif
               emptyStringIfNull(coord.startTime),
               '<a href="' + coord.absoluteUrl + '" data-row-selector="true">' + coord.id + '</a>'
             ], false);
@@ -439,6 +475,9 @@ ${layout.menubar(section='coordinators', dashboard=True)}
           }
         });
         completedTable.fnDraw();
+        % if enable_cron_scheduling:
+        renderCrons(); // utils.inc.mako
+        % endif
       });
     }
   });

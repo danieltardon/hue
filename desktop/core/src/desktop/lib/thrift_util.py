@@ -28,9 +28,10 @@ import sys
 from thrift.Thrift import TType, TApplicationException
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TSSLSocket import TSSLSocket
-from thrift.transport.TTransport import TBufferedTransport, TMemoryBuffer,\
+from thrift.transport.TTransport import TBufferedTransport, TFramedTransport, TMemoryBuffer,\
                                         TTransportException
 from thrift.protocol.TBinaryProtocol import TBinaryProtocol
+from thrift.protocol.TMultiplexedProtocol import TMultiplexedProtocol
 from desktop.lib.python_util import create_synchronous_io_multiplexer
 from desktop.lib.thrift_sasl import TSaslClientTransport
 from desktop.lib.exceptions import StructuredException, StructuredThriftTransportException
@@ -74,11 +75,14 @@ class ConnectionConfig(object):
                kerberos_principal="thrift",
                mechanism='GSSAPI',
                username='hue',
+	       password='hue',
                ca_certs=None,
                keyfile=None,
                certfile=None,
                validate=False,
-               timeout_seconds=45):
+               timeout_seconds=45,
+               transport='buffered',
+               multiple=False):
     """
     @param klass The thrift client class
     @param host Host to connect to
@@ -87,7 +91,8 @@ class ConnectionConfig(object):
     @param use_sasl If true, will use KERBEROS or PLAIN over SASL to authenticate
     @param use_ssl If true, will use ca_certs, keyfile, and certfile to create TLS connection
     @param mechanism: GSSAPI or PLAIN if SASL
-    @param username: username if PLAIN SASL only
+    @param username: username if PLAIN SASL or LDAP only
+    @param password: password if PLAIN LDAP only
     @param kerberos_principal The Kerberos service name to connect to.
               NOTE: for a service like fooservice/foo.blah.com@REALM only
               specify "fooservice", NOT the full principal name.
@@ -96,6 +101,8 @@ class ConnectionConfig(object):
     @param certfile certificate file
     @param validate Validate the certificate received from server
     @param timeout_seconds Timeout for thrift calls
+    @param transport string representation of thrift transport to use
+    @param multiple Whether Use MultiplexedProtocol
     """
     self.klass = klass
     self.host = host
@@ -105,16 +112,19 @@ class ConnectionConfig(object):
     self.use_ssl = use_ssl
     self.mechanism = mechanism
     self.username = username
+    self.password = password
     self.kerberos_principal = kerberos_principal
     self.ca_certs = ca_certs
     self.keyfile = keyfile
     self.certfile = certfile
     self.validate = validate
     self.timeout_seconds = timeout_seconds
+    self.transport = transport
+    self.multiple = multiple
 
   def __str__(self):
     return ', '.join(map(str, [self.klass, self.host, self.port, self.service_name, self.use_sasl, self.kerberos_principal, self.timeout_seconds,
-                               self.mechanism, self.username, self.use_ssl, self.ca_certs, self.keyfile, self.certfile, self.validate]))
+                               self.mechanism, self.username, self.use_ssl, self.ca_certs, self.keyfile, self.certfile, self.validate, self.transport, self.multiple]))
 
 class ConnectionPooler(object):
   """
@@ -243,15 +253,19 @@ def connect_to_thrift(conf):
       saslc.setAttr("service", str(conf.kerberos_principal))
       if conf.mechanism == 'PLAIN':
         saslc.setAttr("username", str(conf.username))
-        saslc.setAttr("password", 'hue') # Just a non empty string
+	saslc.setAttr("password", str(conf.password)) # defaults to hue for a non-empty string unless using ldap
       saslc.init()
       return saslc
 
     transport = TSaslClientTransport(sasl_factory, conf.mechanism, sock)
+  elif conf.transport == 'framed':
+    transport = TFramedTransport(sock)
   else:
     transport = TBufferedTransport(sock)
 
   protocol = TBinaryProtocol(transport)
+  if conf.multiple:
+    protocol = TMultiplexedProtocol(protocol, conf.service_name)
   service = conf.klass(protocol)
   return service, protocol, transport
 
@@ -267,6 +281,8 @@ def _grab_transport_from_wrapper(outer_transport):
     return outer_transport._TBufferedTransport__trans
   elif isinstance(outer_transport, TSaslClientTransport):
     return outer_transport._trans
+  elif isinstance(outer_transport, TFramedTransport):
+    return outer_transport._TFramedTransport__trans
   else:
     raise Exception("Unknown transport type: " + outer_transport.__class__)
 

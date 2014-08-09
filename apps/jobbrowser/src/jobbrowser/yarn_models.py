@@ -88,7 +88,7 @@ class Job:
     setattr(self, 'status', self.state)
     setattr(self, 'jobId', jobid)
     setattr(self, 'jobId_short', self.jobId.replace('job_', ''))
-    setattr(self, 'is_retired', True)
+    setattr(self, 'is_retired', False)
     setattr(self, 'maps_percent_complete', None)
     setattr(self, 'reduces_percent_complete', None)
     setattr(self, 'duration', self.finishTime - self.startTime)
@@ -98,6 +98,9 @@ class Job:
     setattr(self, 'desiredMaps', None)
     setattr(self, 'finishedReduces', self.reducesCompleted)
     setattr(self, 'desiredReduces', None)
+
+    if not hasattr(self, 'acls'):
+      setattr(self, 'acls', {})
 
   @property
   def counters(self):
@@ -155,6 +158,7 @@ class Task:
     setattr(self, 'execFinishTimeFormatted', format_unixtime_ms(self.finishTime))
     setattr(self, 'startTimeFormatted', format_unixtime_ms(self.startTime))
     setattr(self, 'progress', self.progress / 100)
+
   @property
   def attempts(self):
     # We can cache as we deal with history server

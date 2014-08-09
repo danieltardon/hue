@@ -85,7 +85,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
               <li class="white">
                 <button title="${_('Kill %(workflow)s') % dict(workflow=oozie_workflow.id)}"
                    id="kill-btn"
-                   class="btn btn-small confirmationModal
+                   class="btn btn-small btn-danger disable-feedback confirmationModal
                    % if not oozie_workflow.is_running():
                      hide
                    % endif
@@ -279,7 +279,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         </div>
 
         <div class="tab-pane" id="log">
-          <pre>${ oozie_workflow.log.decode('utf-8', 'replace') }</pre>
+          <pre></pre>
         </div>
 
         <div class="tab-pane" id="definition">
@@ -342,7 +342,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
   </div>
   <div class="modal-footer">
     <a href="#" class="btn" data-dismiss="modal">${_('No')}</a>
-    <a class="btn btn-danger" href="javascript:void(0);">${_('Yes')}</a>
+    <a class="btn btn-danger disable-feedback" href="javascript:void(0);">${_('Yes')}</a>
   </div>
 </div>
 
@@ -513,8 +513,10 @@ ${ layout.menubar(section='workflows', dashboard=True) }
       var _this = $(this);
       $("#confirmation .message").text(_this.data("confirmation-message"));
       $("#confirmation").modal("show");
-      $("#confirmation a.btn-danger").click(function() {
+      $("#confirmation a.btn-danger").on("click", function() {
         _this.trigger('confirmation');
+        $(this).attr("data-loading-text", $(this).text() + " ...");
+        $(this).button("loading");
       });
     });
 
@@ -525,6 +527,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Error: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -540,6 +543,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Error: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -555,6 +559,7 @@ ${ layout.menubar(section='workflows', dashboard=True) }
         function(response) {
           if (response['status'] != 0) {
             $(document).trigger("error", "${ _('Error: ') }" + response['data']);
+            $("#confirmation a.btn-danger").button("reset");
           } else {
             window.location.reload();
           }
@@ -577,10 +582,27 @@ ${ layout.menubar(section='workflows', dashboard=True) }
 
     resizeLogs();
     refreshView();
+    refreshLogs();
+
     var logsAtEnd = true;
+    function refreshLogs() {
+      $.getJSON("${ url('oozie:get_oozie_job_log', job_id=oozie_workflow.id) }", function (data) {
+        var _logsEl = $("#log pre");
+        _logsEl.text(data.log);
+
+        if (logsAtEnd) {
+          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
+        }
+        if (data.status != "RUNNING" && data.status != "PREP"){
+          return;
+        }
+        window.setTimeout(refreshLogs, 3000);
+      });
+    }
+
 
     function refreshView() {
-      $.getJSON("${ oozie_workflow.get_absolute_url() }" + "?format=json", function (data) {
+      $.getJSON("${ oozie_workflow.get_absolute_url(format='json') }", function (data) {
 
         if (data.actions){
           viewModel.actions(ko.utils.arrayMap(data.actions, function (action) {
@@ -614,13 +636,6 @@ ${ layout.menubar(section='workflows', dashboard=True) }
 
         $("#graph").html(data.graph);
 
-        var _logsEl = $("#log pre");
-
-        _logsEl.text(data.log);
-
-        if (logsAtEnd) {
-          _logsEl.scrollTop(_logsEl[0].scrollHeight - _logsEl.height());
-        }
         if (data.status != "RUNNING" && data.status != "PREP"){
           return;
         }

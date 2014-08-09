@@ -21,7 +21,7 @@
 
 
 <%def name="frequency_fields()">
-  <div class="control-group" rel="popover" >
+  <div class="control-group">
     <label class="control-label">${ _('When') }</label>
     <div class="controls">
       <div class="row-fluid">
@@ -31,7 +31,7 @@
           <span data-bind="visible: isAdvancedCron" class="pull-right" style="padding-right:20px">
             ${ _('Crontab') }
           </span>&nbsp;
-          <input type="checkbox" name="isAdvancedCron" data-bind="checked: isAdvancedCron" /> (${ _('advanced') })
+          <label class="checkbox" style="display: inline-block"><input type="checkbox" name="isAdvancedCron" data-bind="checked: isAdvancedCron" /> (${ _('advanced') })</label>
         </div>
         <div class="span3">
         </div>

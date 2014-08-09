@@ -20,6 +20,7 @@ import logging
 import json
 import mimetypes
 import operator
+import parquet
 import posixpath
 import re
 import shutil
@@ -80,6 +81,14 @@ INLINE_DISPLAY_MIMETYPE = re.compile('video/|image/|audio/|application/pdf|appli
                                      'application/vnd\.openxmlformats')
 
 logger = logging.getLogger(__name__)
+
+
+class ParquetOptions(object):
+    def __init__(self, col=None, format='json', no_headers=True, limit=-1):
+        self.col = col
+        self.format = format
+        self.no_headers = no_headers
+        self.limit = limit
 
 
 def index(request):
@@ -291,9 +300,6 @@ def listdir(request, path, chooser):
         'file_filter': file_filter,
         'breadcrumbs': breadcrumbs,
         'current_dir_path': path,
-        # These could also be put in automatically via
-        # http://docs.djangoproject.com/en/dev/ref/templates/api/#django-core-context-processors-request,
-        # but manually seems cleaner, since we only need it here.
         'current_request_path': request.path,
         'home_directory': request.fs.isdir(home_dir_path) and home_dir_path or None,
         'cwd_set': True,
@@ -352,11 +358,19 @@ def listdir_paged(request, path):
 
     pagenum = int(request.GET.get('pagenum', 1))
     pagesize = int(request.GET.get('pagesize', 30))
+    do_as = None
+    if request.user.is_superuser:
+      do_as = request.GET.get('doas', request.user.username)
+    if request.user.is_superuser and hasattr(request, 'doas'):
+      do_as = request.doas
 
     home_dir_path = request.user.get_home_directory()
     breadcrumbs = parse_breadcrumbs(path)
 
-    all_stats = request.fs.listdir_stats(path)
+    if do_as:
+      all_stats = request.fs.do_as_user(do_as, request.fs.listdir_stats, path)
+    else:
+      all_stats = request.fs.listdir_stats(path)
 
 
     # Filter first
@@ -398,7 +412,7 @@ def listdir_paged(request, path):
     # actually '.' for display purposes. Encode it since _massage_stats expects byte strings.
     current_stat['path'] = path
     current_stat['name'] = "."
-    shown_stats.insert(0, current_stat)
+    shown_stats.insert(1, current_stat)
 
     page.object_list = [ _massage_stats(request, s) for s in shown_stats ]
 
@@ -459,7 +473,7 @@ def _massage_stats(request, stats):
         'mtime': datetime.fromtimestamp(stats['mtime']).strftime('%B %d, %Y %I:%M %p'),
         'humansize': filesizeformat(stats['size']),
         'type': filetype(stats['mode']),
-        'rwx': rwx(stats['mode']),
+        'rwx': rwx(stats['mode'], stats['aclBit']),
         'mode': stringformat(stats['mode'], "o"),
         'url': make_absolute(request, "view", dict(path=urlquote(normalized))),
         }
@@ -615,15 +629,18 @@ def read_contents(codec_type, path, fs, offset, length):
         # Auto codec detection for [gzip, avro, snappy, none]
         if not codec_type:
             contents = fhandle.read(3)
+            fhandle.seek(0)
             codec_type = 'none'
             if path.endswith('.gz') and detect_gzip(contents):
                 codec_type = 'gzip'
                 offset = 0
             elif path.endswith('.avro') and detect_avro(contents):
                 codec_type = 'avro'
+            elif path.endswith('.parquet') and detect_parquet(fhandle):
+                codec_type = 'parquet'
             elif snappy_installed() and path.endswith('.snappy'):
                 codec_type = 'snappy'
-            elif snappy_installed() and stats.size <= MAX_SNAPPY_DECOMPRESSION_SIZE.get() and detect_snappy(contents + fhandle.read()):
+            elif snappy_installed() and stats.size <= MAX_SNAPPY_DECOMPRESSION_SIZE.get() and detect_snappy(fhandle.read()):
                 codec_type = 'snappy'
 
         fhandle.seek(0)
@@ -632,6 +649,8 @@ def read_contents(codec_type, path, fs, offset, length):
             contents = _read_gzip(fhandle, path, offset, length, stats)
         elif codec_type == 'avro':
             contents = _read_avro(fhandle, path, offset, length, stats)
+        elif codec_type == 'parquet':
+            contents = _read_parquet(fhandle, path, offset, length, stats)
         elif codec_type == 'snappy':
             contents = _read_snappy(fhandle, path, offset, length, stats)
         else:
@@ -685,6 +704,17 @@ def _read_avro(fhandle, path, offset, length, stats):
     return contents
 
 
+def _read_parquet(fhandle, path, offset, length, stats):
+    try:
+        dumped_data = StringIO()
+        parquet._dump(fhandle, ParquetOptions(), out=dumped_data)
+        dumped_data.seek(offset)
+        return dumped_data.read()
+    except:
+        logging.warn("Could not read parquet file at %s" % path, exc_info=True)
+        raise PopupException(_("Failed to read Parquet file."))
+
+
 def _read_gzip(fhandle, path, offset, length, stats):
     contents = ''
     if offset and offset != 0:
@@ -730,6 +760,13 @@ def detect_snappy(contents):
         return snappy.isValidCompressed(contents)
     except:
         return False
+
+
+def detect_parquet(fhandle):
+    """
+    Detect parquet from magic header bytes.
+    """
+    return parquet._check_header_magic_bytes(fhandle)
 
 
 def snappy_installed():

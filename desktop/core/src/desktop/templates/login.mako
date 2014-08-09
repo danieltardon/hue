@@ -22,6 +22,7 @@
 
 ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
 
+<link rel="stylesheet" href="/static/ext/chosen/chosen.min.css">
 <style type="text/css">
   body {
     background-color: #FFF;
@@ -41,13 +42,20 @@ ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
     margin-left: auto;
     margin-right: auto;
     margin-bottom: 10px;
-    background: #FFF url("/static/art/hue-login-logo-ellie.png") 50% 14px no-repeat;
+    background: #FFF url("/static/art/hue-login-logo-ellie.png") 50% 2px no-repeat;
     width: 130px;
     height: 130px;
     -webkit-border-radius: 65px;
     -moz-border-radius: 65px;
     border-radius: 65px;
     border: 1px solid #EEE;
+  }
+
+  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    #logo {
+      background: #FFF url("/static/art/hue-login-logo-ellie@2x.png") 50% 2px no-repeat;
+      background-size: 114px 114px;
+    }
   }
 
   #logo.waiting {
@@ -107,8 +115,13 @@ ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
 
   ul.errorlist {
     text-align: left;
-    margin-top: -4px;
     margin-bottom: 4px;
+    margin-top: -4px;
+  }
+
+  .alert-error ul.errorlist {
+    text-align: center;
+    margin-top: 0;
   }
 
   ul.errorlist li {
@@ -143,6 +156,29 @@ ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
     font-size: 24px;
     font-weight: 400;
     margin-bottom: 20px;
+  }
+
+  .chosen-single {
+    min-height: 38px;
+    text-align: left;
+    font-size: 18px;
+  }
+
+  .chosen-single span {
+    display: inline;
+    line-height: 38px;
+    vertical-align: middle;
+  }
+
+  .chosen-container-active.chosen-with-drop .chosen-single div b,
+  .chosen-container-single .chosen-single div b {
+    background-position-x: 1px;
+    background-position-y: 10px;
+  }
+
+  .chosen-container-active.chosen-with-drop .chosen-single div b {
+    background-position-x: -17px;
+    background-position-y: 10px;
   }
 </style>
 
@@ -190,17 +226,20 @@ ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
         </div>
         ${ form['password'].errors | n,unicode }
 
-        %if login_errors:
+        %if active_directory:
+        <div class="input-prepend">
+          <span class="add-on"><i class="fa fa-globe"></i></span>
+          ${ form['server'] | n,unicode }
+        </div>
+        %endif
+
+        %if login_errors and not form['username'].errors and not form['password'].errors:
           <div class="alert alert-error" style="text-align: center">
             <strong><i class="fa fa-exclamation-triangle"></i> ${_('Error!')}</strong>
-            <br />
-            <br />
             % if form.errors:
               % for error in form.errors:
-                ${ form.errors[error]|unicode,n }
+               ${ form.errors[error]|unicode,n }
               % endfor
-            % else:
-              <strong>${_('Invalid username or password.')}</strong>
             % endif
           </div>
         %endif
@@ -216,8 +255,15 @@ ${ commonheader("Welcome to Hue", "login", user, "50px") | n,unicode }
   </div>
 </div>
 
+<script src="/static/ext/chosen/chosen.jquery.min.js" type="text/javascript" charset="utf-8"></script>
 <script>
   $(document).ready(function () {
+    $("#id_server").chosen({
+      disable_search_threshold: 5,
+      width: "90%",
+      no_results_text: "${_('Oops, no database found!')}"
+    });
+
     $("form").on("submit", function () {
       window.setTimeout(function () {
         $("#logo").addClass("waiting");

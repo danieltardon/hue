@@ -51,7 +51,7 @@ import beeswax.views
 
 from beeswax import conf, hive_site
 from beeswax.conf import HIVE_SERVER_HOST
-from beeswax.views import collapse_whitespace
+from beeswax.views import collapse_whitespace, _save_design
 from beeswax.test_base import make_query, wait_for_query_to_finish, verify_history, get_query_server_config,\
   HIVE_SERVER_TEST_PORT, fetch_query_result_data
 from beeswax.design import hql_query, strip_trailing_semicolon
@@ -64,6 +64,8 @@ from beeswax.server.hive_server2_lib import HiveServerClient,\
 from beeswax.test_base import BeeswaxSampleProvider
 from beeswax.hive_site import get_metastore
 
+from desktop.lib.exceptions_renderable import PopupException
+from desktop.conf import LDAP_USERNAME, LDAP_PASSWORD
 
 
 LOG = logging.getLogger(__name__)
@@ -242,7 +244,7 @@ for x in sys.stdin:
   def test_result_escaping(self):
     # Check for XSS and NULL display
     QUERY = """
-      SELECT 'abc', 1.0, 1=1, 1, 1/0, '<a>lala</a>lulu' from test LIMIT 3;
+      SELECT 'abc', 1.0, 1=1, 1, 1/0, '<a>lala</a>lulu', 'some   spaces' from test LIMIT 3;
     """
     response = _make_query(self.client, QUERY, local=False)
     content = json.loads(response.content)
@@ -252,9 +254,9 @@ for x in sys.stdin:
     content = fetch_query_result_data(self.client, response)
 
     assert_equal([
-        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu'],
-        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu'],
-        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu'],
+        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu', 'some&nbsp;&nbsp;&nbsp;spaces'],
+        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu', 'some&nbsp;&nbsp;&nbsp;spaces'],
+        [u'abc', 1.0, True, 1, u'NULL', u'&lt;a&gt;lala&lt;/a&gt;lulu', 'some&nbsp;&nbsp;&nbsp;spaces'],
       ], content["results"], content)
 
   def test_query_with_udf(self):
@@ -1111,7 +1113,7 @@ for x in sys.stdin:
     self._make_table('timestamp_valid_data', 'CREATE TABLE timestamp_valid_data (timestamp1 TIMESTAMP)', filename)
 
     response = self.client.get("/metastore/table/default/timestamp_valid_data")
-    assert_true('2012-01-01 10:11:30' in response.content, response.content)
+    assert_true('2012-01-01&nbsp;10:11:30' in response.content, response.content)
 
   def test_partitioned_create_table(self):
     # Make sure we get a form
@@ -1351,7 +1353,7 @@ for x in sys.stdin:
     assert_equal([ col.name for col in cols ], [ 'col_a', 'col_b', 'col_c' ])
     assert_equal([['ta\tb', 'nada', 'sp ace'], ['f\too', 'bar', 'fred'], ['a\ta', 'bb', 'cc']], resp.context['sample'])
     assert_true("nada" in resp.content, resp.content)
-    assert_true("sp ace" in resp.content, resp.content)
+    assert_true("sp&nbsp;ace" in resp.content, resp.content)
 
     # Test table creation and data loading and removing header
     resp = self.client.post('/beeswax/create/import_wizard/default', {
@@ -1595,12 +1597,23 @@ Starting Job = job_201003191517_0002, Tracking URL = http://localhost:50030/jobd
     --- we should be ignoring duplicates ---
 Starting Job = job_201003191517_0002, Tracking URL = http://localhost:50030/jobdetails.jsp?jobid=job_201003191517_0002
 Starting Job = job_201003191517_0003, Tracking URL = http://localhost:50030/jobdetails.jsp?jobid=job_201003191517_0003
-12/12/27 10:48:22 INFO mapreduce.Job: The url to track the job: http://localhost:8088/proxy/application_1356251510842_0022/
+14/06/10 14:30:55 INFO exec.Task: Starting Job = job_1402420825148_0001, Tracking URL = http://localhost:8088/proxy/application_1402420825148_0001/
 """
-  assert_equal(["job_201003191517_0002", "job_201003191517_0003", "application_1356251510842_0022"],
+  assert_equal(
+    ["job_201003191517_0002", "job_201003191517_0003", "job_1402420825148_0001"],
     beeswax.views._parse_out_hadoop_jobs(sample_log))
   assert_equal([], beeswax.views._parse_out_hadoop_jobs("nothing to see here"))
 
+  sample_log_no_direct_url = """
+14/06/09 08:40:38 INFO impl.YarnClientImpl: Submitted application application_1402269517321_0003
+14/06/09 08:40:38 INFO mapreduce.Job: The url to track the job: N/A
+14/06/09 08:40:38 INFO exec.Task: Starting Job = job_1402269517321_0003, Tracking URL = N/A
+14/06/09 08:40:38 INFO exec.Task: Kill Command = /usr/lib/hadoop/bin/hadoop job  -kill job_1402269517321_0003
+14/06/09 08:40:38 INFO cli.CLIService: OperationHandle [opType=EXECUTE_STATEMENT, getHandleIdentifier()=2168d15e-96d2-415a-8d49-e2535e82c2a4]: getOperationStatus()
+"""
+  assert_equal(
+      ["job_1402269517321_0003"],
+      beeswax.views._parse_out_hadoop_jobs(sample_log_no_direct_url))
 
 def test_hive_site():
   tmpdir = tempfile.mkdtemp()
@@ -1719,12 +1732,21 @@ def test_search_log_line():
 
 
 def test_split_statements():
-  assert_equal([''], hql_query(";;;").statements)
+  assert_equal([], hql_query(";;;").statements)
   assert_equal(["select * where id == '10'"], hql_query("select * where id == '10'").statements)
   assert_equal(["select * where id == '10'"], hql_query("select * where id == '10';").statements)
   assert_equal(['select', "select * where id == '10;' limit 100"], hql_query("select; select * where id == '10;' limit 100;").statements)
   assert_equal(['select', "select * where id == \"10;\" limit 100"], hql_query("select; select * where id == \"10;\" limit 100;").statements)
   assert_equal(['select', "select * where id == '\"10;\"\"\"' limit 100"], hql_query("select; select * where id == '\"10;\"\"\"' limit 100;").statements)
+
+  query_with_comments = """--First query;
+select concat('--', name)  -- The '--' in quotes is not a comment
+where id = '10';
+-- Second query
+select * where id = '10';"""
+  assert_equal(["--First query;\nselect concat(\'--\', name)  -- The \'--\' in quotes is not a comment\nwhere id = \'10\'",
+"-- Second query\nselect * where id = \'10\'"], hql_query(query_with_comments).statements)
+
   query = """CREATE DATABASE IF NOT EXISTS functional;
 DROP TABLE IF EXISTS functional.alltypes;
 CREATE EXTERNAL TABLE IF NOT EXISTS functional.alltypes (
@@ -1740,7 +1762,7 @@ date_string_col string,
 string_col string,
 timestamp_col timestamp)
 PARTITIONED BY (year int, month int)
-ROW FORMAT delimited fields terminated by ','  escaped by '\\'
+ROW FORMAT delimited fields terminated by ','  escaped by '\\\\'
 STORED AS TEXTFILE
 LOCATION '/user/admin/alltypes/alltypes';
 
@@ -1749,7 +1771,7 @@ ALTER TABLE alltypes ADD IF NOT EXISTS PARTITION(year=2009, month=1);
 ALTER TABLE alltypes ADD IF NOT EXISTS PARTITION(year=2009, month=2);"""
   assert_equal(['CREATE DATABASE IF NOT EXISTS functional',
                 'DROP TABLE IF EXISTS functional.alltypes',
-                "CREATE EXTERNAL TABLE IF NOT EXISTS functional.alltypes (\nid int COMMENT 'Add a comment',\nbool_col boolean,\ntinyint_col tinyint,\nsmallint_col smallint,\nint_col int,\nbigint_col bigint,\nfloat_col float,\ndouble_col double,\ndate_string_col string,\nstring_col string,\ntimestamp_col timestamp)\nPARTITIONED BY (year int, month int)\nROW FORMAT delimited fields terminated by ','  escaped by '\\'\nSTORED AS TEXTFILE\nLOCATION '/user/admin/alltypes/alltypes'",
+                "CREATE EXTERNAL TABLE IF NOT EXISTS functional.alltypes (\nid int COMMENT 'Add a comment',\nbool_col boolean,\ntinyint_col tinyint,\nsmallint_col smallint,\nint_col int,\nbigint_col bigint,\nfloat_col float,\ndouble_col double,\ndate_string_col string,\nstring_col string,\ntimestamp_col timestamp)\nPARTITIONED BY (year int, month int)\nROW FORMAT delimited fields terminated by ','  escaped by '\\\\'\nSTORED AS TEXTFILE\nLOCATION '/user/admin/alltypes/alltypes'",
                 'USE functional',
                 'ALTER TABLE alltypes ADD IF NOT EXISTS PARTITION(year=2009, month=1)',
                 'ALTER TABLE alltypes ADD IF NOT EXISTS PARTITION(year=2009, month=2)'
@@ -1840,6 +1862,9 @@ class TestWithMockedServer(object):
     dbms.HiveServer2Dbms = MockDbms
 
     self.client = make_logged_in_client(is_superuser=False)
+    self.client_not_me = make_logged_in_client(username='not_me', is_superuser=False, groupname='test')
+    self.user = User.objects.get(username='test')
+    self.user_not_me = User.objects.get(username='not_me')
     grant_access("test", "test", "beeswax")
 
   def tearDown(self):
@@ -1892,6 +1917,63 @@ class TestWithMockedServer(object):
     ids_page_1 = set([query.id for query in resp.context['page'].object_list])
     assert_equal(0, sum([query_id in ids_page_1 for query_id in ids]))
 
+  def test_save_design(self):
+    response = _make_query(self.client, 'SELECT', submission_type='Save', name='My Name 1', desc='My Description')
+    content = json.loads(response.content)
+    design_id = content['design_id']
+
+    design = SavedQuery.objects.get(id=design_id)
+    design_obj = hql_query('SELECT')
+
+    # Save his own query
+    saved_design = _save_design(user=self.user, design=design, type_=HQL, design_obj=design_obj, explicit_save=True, name='test_save_design', desc='test_save_design desc')
+    assert_equal('test_save_design', saved_design.name)
+    assert_equal('test_save_design desc', saved_design.desc)
+    assert_equal('test_save_design', saved_design.doc.get().name)
+    assert_equal('test_save_design desc', saved_design.doc.get().description)
+    assert_false(saved_design.doc.get().is_historic())
+
+    # Execute it as auto
+    saved_design = _save_design(user=self.user, design=design, type_=HQL, design_obj=design_obj, explicit_save=False, name='test_save_design', desc='test_save_design desc')
+    assert_equal('test_save_design (new)', saved_design.name)
+    assert_equal('test_save_design desc', saved_design.desc)
+    assert_equal('test_save_design (new)', saved_design.doc.get().name)
+    assert_equal('test_save_design desc', saved_design.doc.get().description)
+    assert_true(saved_design.doc.get().is_historic())
+
+    # not_me user can't modify it
+    try:
+      _save_design(user=self.user_not_me, design=design, type_=HQL, design_obj=design_obj, explicit_save=True, name='test_save_design', desc='test_save_design desc')
+      assert_true(False, 'not_me is not allowed')
+    except PopupException:
+      pass
+
+    saved_design.doc.get().share_to_default()
+
+    try:
+      _save_design(user=self.user_not_me, design=design, type_=HQL, design_obj=design_obj, explicit_save=True, name='test_save_design', desc='test_save_design desc')
+      assert_true(False, 'not_me is not allowed')
+    except PopupException:
+      pass
+
+    # not_me can execute it as auto
+    saved_design = _save_design(user=self.user_not_me, design=design, type_=HQL, design_obj=design_obj, explicit_save=False, name='test_save_design', desc='test_save_design desc')
+    assert_equal('test_save_design (new)', saved_design.name)
+    assert_equal('test_save_design desc', saved_design.desc)
+    assert_equal('test_save_design (new)', saved_design.doc.get().name)
+    assert_equal('test_save_design desc', saved_design.doc.get().description)
+    assert_true(saved_design.doc.get().is_historic())
+
+    # not_me can save as a new design
+    design = SavedQuery(owner=self.user_not_me, type=HQL)
+
+    saved_design = _save_design(user=self.user_not_me, design=design, type_=HQL, design_obj=design_obj, explicit_save=True, name='test_save_design', desc='test_save_design desc')
+    assert_equal('test_save_design', saved_design.name)
+    assert_equal('test_save_design desc', saved_design.desc)
+    assert_equal('test_save_design', saved_design.doc.get().name)
+    assert_equal('test_save_design desc', saved_design.doc.get().description)
+    assert_false(saved_design.doc.get().is_historic())
+
 
 class TestDesign():
 
@@ -1935,27 +2017,37 @@ def test_hiveserver2_get_security():
     # Beeswax
     beeswax_query_server = {'server_name': 'beeswax', 'principal': 'hive'}
     beeswax_query_server.update(default_query_server)
-    assert_equal((True, 'PLAIN', 'hive', False), HiveServerClient(beeswax_query_server, user).get_security())
+    assert_equal((True, 'PLAIN', 'hive', False, None, None), HiveServerClient(beeswax_query_server, user).get_security())
+
+    # HiveServer2 LDAP passthrough
+    finish = []
+    finish.append(LDAP_USERNAME.set_for_testing('hueabcd'))
+    finish.append(LDAP_PASSWORD.set_for_testing('abcd'))
+    try:
+      assert_equal((True, 'PLAIN', 'hive', False, 'hueabcd', 'abcd'), HiveServerClient(beeswax_query_server, user).get_security())
+    finally:
+      for f in finish:
+        f()
 
     hive_site._HIVE_SITE_DICT[hive_site._CNF_HIVESERVER2_AUTHENTICATION] = 'NOSASL'
     hive_site._HIVE_SITE_DICT[hive_site._CNF_HIVESERVER2_IMPERSONATION] = 'true'
-    assert_equal((False, 'NOSASL', 'hive', True), HiveServerClient(beeswax_query_server, user).get_security())
+    assert_equal((False, 'NOSASL', 'hive', True, None, None), HiveServerClient(beeswax_query_server, user).get_security())
     hive_site._HIVE_SITE_DICT[hive_site._CNF_HIVESERVER2_AUTHENTICATION] = 'KERBEROS'
-    assert_equal((True, 'GSSAPI', 'hive', True), HiveServerClient(beeswax_query_server, user).get_security())
+    assert_equal((True, 'GSSAPI', 'hive', True, None, None), HiveServerClient(beeswax_query_server, user).get_security())
 
     # Impala
     impala_query_server = {'server_name': 'impala', 'principal': 'impala', 'impersonation_enabled': False}
     impala_query_server.update(default_query_server)
-    assert_equal((False, 'GSSAPI', 'impala', False), HiveServerClient(impala_query_server, user).get_security())
+    assert_equal((False, 'GSSAPI', 'impala', False, None, None), HiveServerClient(impala_query_server, user).get_security())
 
     impala_query_server = {'server_name': 'impala', 'principal': 'impala', 'impersonation_enabled': True}
     impala_query_server.update(default_query_server)
-    assert_equal((False, 'GSSAPI', 'impala', True), HiveServerClient(impala_query_server, user).get_security())
+    assert_equal((False, 'GSSAPI', 'impala', True, None, None), HiveServerClient(impala_query_server, user).get_security())
 
     cluster_conf = hadoop.cluster.get_cluster_conf_for_job_submission()
     finish = cluster_conf.SECURITY_ENABLED.set_for_testing(True)
     try:
-      assert_equal((True, 'GSSAPI', 'impala', True), HiveServerClient(impala_query_server, user).get_security())
+      assert_equal((True, 'GSSAPI', 'impala', True, None, None), HiveServerClient(impala_query_server, user).get_security())
     finally:
       finish()
   finally:
@@ -1968,43 +2060,46 @@ def test_hiveserver2_get_security():
 class MockClient():
 
   def __init__(self):
-    self.open_session_args= None
+    self.open_session_args = None
 
   def OpenSession(self, args):
     self.open_session_args = args
 
 
-def test_hive_server2_open_session():
-  make_logged_in_client()
-  user = User.objects.get(username='test')
-
-  query_server = get_query_server_config()
-
-  db_client = HiveServerClient(query_server, user)
-  mock_hs2_client = MockClient()
-  setattr(db_client, '_client', mock_hs2_client)
-
-  # Regular session
-  try:
-    db_client.open_session(user)
-  except:
-    pass
-  finally:
-    req = mock_hs2_client.open_session_args
-    assert_equal('hue', req.username)
-    assert_equal(None, req.password)
-
-  # LDAP credentials
-  finish = desktop_conf.LDAP_PASSWORD.set_for_testing('I_love_Hue')
-  try:
-    db_client.open_session(user)
-  except:
-    pass
-  finally:
-    finish()
-    req = mock_hs2_client.open_session_args
-    assert_equal('hue', req.username)
-    assert_equal('I_love_Hue', req.password)
+#def test_hive_server2_open_session():
+#  make_logged_in_client()
+#  user = User.objects.get(username='test')
+#
+#  query_server = get_query_server_config()
+#
+#  db_client = HiveServerClient(query_server, user)
+#  mock_hs2_client = MockClient()
+#  setattr(db_client, '_client', mock_hs2_client)
+#
+#  # Regular session
+#  finish = desktop_conf.LDAP_PASSWORD.set_for_testing('')
+#  try:
+#    db_client.open_session(user)
+#  except:
+#    pass
+#  finally:
+#    finish()
+#    req = mock_hs2_client.open_session_args
+#    assert_equal('test', req.username)
+#    assert_equal(None, req.password)
+#    assert_equal('test', req.configuration['hive.server2.proxy.user'])
+#
+#  # LDAP credentials
+#  finish = desktop_conf.LDAP_PASSWORD.set_for_testing('I_love_Hue')
+#  try:
+#    db_client.open_session(user)
+#  except:
+#    pass
+#  finally:
+#    finish()
+#    req = mock_hs2_client.open_session_args
+#    assert_equal('test', req.username) # Same as kerberos, real username is picked from Thrift authentication, this one does not matter
+#    assert_equal(None, req.password)
 
 
 def test_metastore_security():

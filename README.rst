@@ -3,8 +3,8 @@
 Welcome to the repository for Hue
 =================================
 
-`Hue
-<http://gethue.com>`_ is an open source Web UI for doing big data with Hadoop.
+Hue is an open source Web interface for analyzing data with Apache Hadoop: `gethue.com
+<http://gethue.com>`_ 
 
 .. image:: docs/images/hue-screen.png
 
@@ -12,12 +12,12 @@ It features:
 
       * File Browser for accessing HDFS
       * Hive Editor for developing and running Hive queries
-      * Impala App for executing Impala queries
-      * Search App for querying and exploring data with Solr
+      * Search App for querying, exploring, visualizing data and dashboards with Solr
+      * Impala App for executing interactive SQL queries
       * Spark Editor and Dashboard
       * Pig Editor for submitting Pig scripts
-      * Oozie App for submitting and monitoring workflows, coordinators and bundles
-      * HBase Browser for visualizing and modifying HBase tables
+      * Oozie Editor and Dashboard for submitting and monitoring workflows, coordinators and bundles
+      * HBase Browser for visualizing, querying and modifying HBase tables
       * Metastore Browser for accessing Hive metadata and HCatalog
       * Job Browser for accessing MapReduce jobs (MR1/MR2-YARN)
       * Job Designer for creating MapReduce/Streaming/Java jobs
@@ -80,7 +80,7 @@ your system:
       * libtidy-0.99-0 (for unit tests only)
       * libxml2-dev
       * libxslt-dev
-      * mvn (from ``maven2`` package or tarball)
+      * mvn (from ``maven`` package or maven3 tarball)
       * openldap-dev / libldap2-dev
       * python-dev
       * python-simplejson
@@ -97,7 +97,7 @@ your system:
       * libtidy (for unit tests only)
       * libxml2-devel
       * libxslt-devel
-      * mvn (from ``maven2`` package or tarball)
+      * mvn (from ``maven`` package or maven3 tarball)
       * mysql
       * mysql-devel
       * openldap-devel
@@ -150,12 +150,13 @@ namespace.  See ``apps/about/src/about/urls.py`` for an example.
 
 Main Stack
 ==========
+Hue would not be possible without:
 
    * Python 2.6 - 2.7
-   * Django 1.4 https://docs.djangoproject.com/en/1.4/
-   * Mako
-   * jQuery
-   * Bootstrap
+   * Django 1.4 (https://docs.djangoproject.com/en/1.4/)
+   * Knockout.js (http://knockoutjs.com/)
+   * jQuery (http://jquery.com/)
+   * Bootstrap (http://getbootstrap.com/)
 
 
 Community

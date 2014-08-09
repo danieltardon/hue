@@ -38,7 +38,7 @@ from desktop.log.access import access_warn
 from liboozie.oozie_api import get_oozie
 from liboozie.submittion import Submission
 
-from oozie.conf import OOZIE_JOBS_COUNT
+from oozie.conf import OOZIE_JOBS_COUNT, ENABLE_CRON_SCHEDULING
 from oozie.forms import RerunForm, ParameterForm, RerunCoordForm,\
   RerunBundleForm
 from oozie.models import History, Job, Workflow, utc_datetime_format, Bundle,\
@@ -125,6 +125,7 @@ def list_oozie_coordinators(request):
     kwargs['user'] = request.user.username
 
   coordinators = get_oozie(request.user).get_coordinators(**kwargs)
+  enable_cron_scheduling = ENABLE_CRON_SCHEDULING.get()
 
   if request.GET.get('format') == 'json':
     json_jobs = coordinators.jobs
@@ -137,6 +138,7 @@ def list_oozie_coordinators(request):
   return render('dashboard/list_oozie_coordinators.mako', request, {
     'jobs': split_oozie_jobs(request.user, coordinators.jobs),
     'has_job_edition_permission': has_job_edition_permission,
+    'enable_cron_scheduling': enable_cron_scheduling,
   })
 
 
@@ -163,23 +165,23 @@ def list_oozie_bundles(request):
 
 
 @show_oozie_error
-def list_oozie_workflow(request, job_id, coordinator_job_id=None, bundle_job_id=None):
+def list_oozie_workflow(request, job_id):
   oozie_workflow = check_job_access_permission(request, job_id)
 
   oozie_coordinator = None
-  if coordinator_job_id is not None:
-    oozie_coordinator = check_job_access_permission(request, coordinator_job_id)
+  if request.GET.get('coordinator_job_id'):
+    oozie_coordinator = check_job_access_permission(request, request.GET.get('coordinator_job_id'))
 
   oozie_bundle = None
-  if bundle_job_id is not None:
-    oozie_bundle = check_job_access_permission(request, bundle_job_id)
+  if request.GET.get('bundle_job_id'):
+    oozie_bundle = check_job_access_permission(request, request.GET.get('bundle_job_id'))
 
   if oozie_coordinator is not None:
     setattr(oozie_workflow, 'oozie_coordinator', oozie_coordinator)
   if oozie_bundle is not None:
     setattr(oozie_workflow, 'oozie_bundle', oozie_bundle)
 
-  history = History.cross_reference_submission_history(request.user, job_id, coordinator_job_id)
+  history = History.cross_reference_submission_history(request.user, job_id)
 
   hue_coord = history and history.get_coordinator() or History.get_coordinator_from_config(oozie_workflow.conf_dict)
   hue_workflow = (hue_coord and hue_coord.workflow) or (history and history.get_workflow()) or History.get_workflow_from_config(oozie_workflow.conf_dict)
@@ -204,7 +206,6 @@ def list_oozie_workflow(request, job_id, coordinator_job_id=None, bundle_job_id=
       'status':  oozie_workflow.status,
       'progress': oozie_workflow.get_progress(full_node_list),
       'graph': workflow_graph,
-      'log': oozie_workflow.log,
       'actions': massaged_workflow_actions_for_json(oozie_workflow.get_working_actions(), oozie_coordinator, oozie_bundle)
     }
     return HttpResponse(encode_json_for_js(return_obj), mimetype="application/json")
@@ -233,7 +234,7 @@ def list_oozie_workflow(request, job_id, coordinator_job_id=None, bundle_job_id=
 
 
 @show_oozie_error
-def list_oozie_coordinator(request, job_id, bundle_job_id=None):
+def list_oozie_coordinator(request, job_id):
   oozie_coordinator = check_job_access_permission(request, job_id)
 
   # Cross reference the submission history (if any)
@@ -244,8 +245,8 @@ def list_oozie_coordinator(request, job_id, bundle_job_id=None):
     pass
 
   oozie_bundle = None
-  if bundle_job_id is not None:
-    oozie_bundle = check_job_access_permission(request, bundle_job_id)
+  if request.GET.get('bundle_job_id'):
+    oozie_bundle = check_job_access_permission(request, request.GET.get('bundle_job_id'))
 
   show_all_actions =request.GET.get('show_all_actions') == 'true'
 
@@ -260,7 +261,6 @@ def list_oozie_coordinator(request, job_id, bundle_job_id=None):
       'progress': oozie_coordinator.get_progress(),
       'nextTime': format_time(oozie_coordinator.nextMaterializedTime),
       'endTime': format_time(oozie_coordinator.endTime),
-      'log': oozie_coordinator.log,
       'actions': actions,
       'show_all_actions': show_all_actions
     }
@@ -275,6 +275,8 @@ def list_oozie_coordinator(request, job_id, bundle_job_id=None):
     }
     oozie_slas = api.get_oozie_slas(**params)
 
+  enable_cron_scheduling = ENABLE_CRON_SCHEDULING.get()
+
   return render('dashboard/list_oozie_coordinator.mako', request, {
     'oozie_coordinator': oozie_coordinator,
     'oozie_slas': oozie_slas,
@@ -282,7 +284,8 @@ def list_oozie_coordinator(request, job_id, bundle_job_id=None):
     'oozie_bundle': oozie_bundle,
     'has_job_edition_permission': has_job_edition_permission,
     'show_all_actions': show_all_actions,
-    'MAX_COORD_ACTIONS': MAX_COORD_ACTIONS
+    'MAX_COORD_ACTIONS': MAX_COORD_ACTIONS,
+    'enable_cron_scheduling': enable_cron_scheduling,
   })
 
 
@@ -303,7 +306,6 @@ def list_oozie_bundle(request, job_id):
       'status':  oozie_bundle.status,
       'progress': oozie_bundle.get_progress(),
       'endTime': format_time(oozie_bundle.endTime),
-      'log': oozie_bundle.log,
       'actions': massaged_bundle_actions_for_json(oozie_bundle)
     }
     return HttpResponse(json.dumps(return_obj).replace('\\\\', '\\'), mimetype="application/json")
@@ -316,7 +318,7 @@ def list_oozie_bundle(request, job_id):
 
 
 @show_oozie_error
-def list_oozie_workflow_action(request, action, coordinator_job_id=None, bundle_job_id=None):
+def list_oozie_workflow_action(request, action):
   try:
     action = get_oozie(request.user).get_action(action)
     workflow = check_job_access_permission(request, action.id.split('@')[0])
@@ -324,12 +326,12 @@ def list_oozie_workflow_action(request, action, coordinator_job_id=None, bundle_
     raise PopupException(_("Error accessing Oozie action %s.") % (action,), detail=ex.message)
 
   oozie_coordinator = None
-  if coordinator_job_id is not None:
-    oozie_coordinator = check_job_access_permission(request, coordinator_job_id)
+  if request.GET.get('coordinator_job_id'):
+    oozie_coordinator = check_job_access_permission(request, request.GET.get('coordinator_job_id'))
 
   oozie_bundle = None
-  if bundle_job_id is not None:
-    oozie_bundle = check_job_access_permission(request, bundle_job_id)
+  if request.GET.get('bundle_job_id'):
+    oozie_bundle = check_job_access_permission(request, request.GET.get('bundle_job_id'))
 
   workflow.oozie_coordinator = oozie_coordinator
   workflow.oozie_bundle = oozie_bundle
@@ -340,6 +342,19 @@ def list_oozie_workflow_action(request, action, coordinator_job_id=None, bundle_
     'oozie_coordinator': oozie_coordinator,
     'oozie_bundle': oozie_bundle,
   })
+
+
+@show_oozie_error
+def get_oozie_job_log(request, job_id):
+  oozie_job = check_job_access_permission(request, job_id)
+
+  return_obj = {
+    'id': oozie_job.id,
+    'status':  oozie_job.status,
+    'log': oozie_job.log,
+  }
+
+  return HttpResponse(encode_json_for_js(return_obj), mimetype="application/json")
 
 
 @show_oozie_error
@@ -659,15 +674,15 @@ def massaged_coordinator_actions_for_json(coordinator, oozie_bundle):
   coordinator_actions = coordinator.get_working_actions()
   actions = []
 
-  action_link_params = {}
+  related_job_ids = []
   if oozie_bundle is not None:
-    action_link_params['bundle_job_id'] = oozie_bundle.id
+    related_job_ids.append('bundle_job_id=%s' %oozie_bundle.id)
 
   for action in coordinator_actions:
-    action_link_params.update({'job_id': action.externalId, 'coordinator_job_id': coordinator_id})
+    related_job_ids.append('coordinator_job_id=%s' % coordinator_id)
     massaged_action = {
       'id': action.id,
-      'url': action.externalId and reverse('oozie:list_oozie_workflow', kwargs=action_link_params) or '',
+      'url': action.externalId and reverse('oozie:list_oozie_workflow', kwargs={'job_id': action.externalId}) + '?%s' % '&'.join(related_job_ids) or '',
       'number': action.actionNumber,
       'type': action.type,
       'status': action.status,
@@ -694,7 +709,7 @@ def massaged_bundle_actions_for_json(bundle):
   for action in bundle_actions:
     massaged_action = {
       'id': action.coordJobId,
-      'url': action.coordJobId and reverse('oozie:list_oozie_coordinator', kwargs={'job_id': action.coordJobId, 'bundle_job_id': bundle.id}) or '',
+      'url': action.coordJobId and reverse('oozie:list_oozie_coordinator', kwargs={'job_id': action.coordJobId}) + '?bundle_job_id=%s' % bundle.id or '',
       'name': action.coordJobName,
       'type': action.type,
       'status': action.status,
@@ -722,8 +737,10 @@ def massaged_bundle_actions_for_json(bundle):
 def format_time(st_time):
   if st_time is None:
     return '-'
-  else:
+  elif type(st_time) == time.struct_time:
     return time.strftime("%a, %d %b %Y %H:%M:%S", st_time)
+  else:
+    return st_time
 
 
 def massaged_oozie_jobs_for_json(oozie_jobs, user, just_sla=False):
@@ -741,7 +758,8 @@ def massaged_oozie_jobs_for_json(oozie_jobs, user, just_sla=False):
       massaged_job = {
         'id': job.id,
         'lastModTime': hasattr(job, 'lastModTime') and job.lastModTime and format_time(job.lastModTime) or None,
-        'kickoffTime': hasattr(job, 'kickoffTime') and job.kickoffTime or '',
+        'kickoffTime': hasattr(job, 'kickoffTime') and job.kickoffTime and format_time(job.kickoffTime) or '',
+        'nextMaterializedTime': hasattr(job, 'nextMaterializedTime') and job.nextMaterializedTime and format_time(job.nextMaterializedTime) or '',
         'timeOut': hasattr(job, 'timeOut') and job.timeOut or None,
         'endTime': job.endTime and format_time(job.endTime) or None,
         'status': job.status,

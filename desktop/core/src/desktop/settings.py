@@ -24,6 +24,7 @@ import logging
 import os
 import sys
 import pkg_resources
+from guppy import hpy
 
 import desktop.conf
 import desktop.log
@@ -345,6 +346,10 @@ if OAUTH_AUTHENTICATION:
 if desktop.conf.REDIRECT_WHITELIST.get():
   MIDDLEWARE_CLASSES.append('desktop.middleware.EnsureSafeRedirectURLMiddleware')
 
+#Support HTTPS load-balancing
+if desktop.conf.SECURE_PROXY_SSL_HEADER.get():
+  SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTOCOL', 'https')
+
 ############################################################
 
 # Necessary for South to not fuzz with tests.  Fixed in South 0.7.1
@@ -353,3 +358,8 @@ SKIP_SOUTH_TESTS = True
 # Set up environment variable so Kerberos libraries look at our private
 # ticket cache
 os.environ['KRB5CCNAME'] = desktop.conf.KERBEROS.CCACHE_PATH.get()
+
+# Memory
+if desktop.conf.MEMORY_PROFILER.get():
+  MEMORY_PROFILER = hpy()
+  MEMORY_PROFILER.setrelheap()

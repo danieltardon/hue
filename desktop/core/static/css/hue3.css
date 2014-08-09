@@ -597,6 +597,7 @@ table.display td.center {
   background: url('../art/datatables/sort_asc.png') no-repeat center left;
   border-top: 3px solid #FFFFFF !important;
   padding-left: 20px !important;
+  vertical-align: middle!important;
 }
 
 .sorting_desc {
@@ -604,6 +605,7 @@ table.display td.center {
   background: url('../art/datatables/sort_desc.png') no-repeat center left;
   border-top: 3px solid #FFFFFF !important;
   padding-left: 20px !important;
+  vertical-align: middle!important;
 }
 
 .sorting {
@@ -611,6 +613,11 @@ table.display td.center {
   background: url('../art/datatables/sort_both.png') no-repeat center left;
   border-top: 3px solid #FFFFFF !important;
   padding-left: 20px !important;
+  vertical-align: middle!important;
+}
+
+.sorting_disabled {
+  vertical-align: middle!important;
 }
 
 .sorting:hover, .sorting_asc:hover, .sorting_desc:hover {
@@ -998,6 +1005,7 @@ div.box {
   width: 400px;
   text-align: center;
   z-index: 8000;
+  word-break: break-word;
 }
 
 .jHueNotify .close {
@@ -1058,6 +1066,16 @@ a#advanced-btn:hover {
 
 .hueCheckbox:hover {
   border-color: #999999;
+}
+
+.hueCheckboxText {
+  left: 3px;
+  position: relative;
+  top: -3px;
+}
+
+.hueCheckbox.hide {
+  display: none!important;
 }
 
 .modal form {
@@ -1252,12 +1270,6 @@ a#advanced-btn:hover {
   z-index: 9999;
 }
 
-
-.card table {
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
 .tooltip {
   border: 0;
   z-index: 1032;
@@ -1439,6 +1451,13 @@ a#advanced-btn:hover {
   padding-top: 6px;
 }
 
+.navigator .dropdown-menu > li > a > .fa {
+  color: #267CC3;
+  font-size: 19px;
+  padding-left: 5px;
+  padding-right: 8px;
+}
+
 .navigator .dropdown-menu > li > a {
   padding-left: 5px;
   padding-right: 30px;
@@ -1578,5 +1597,140 @@ a, a:hover, a:active, a:focus {
 }
 
 body.modal-open {
-    overflow: hidden;
+  overflow: hidden;
+}
+
+.demi-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  width: 100%;
+  margin: -1px;
+  padding: 0;
+  background-color: #ffffff;
+  min-height: 210px;
+  border: 1px solid #999;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  *border: 1px solid #999;
+  -webkit-border-bottom-right-radius: 0px;
+-webkit-border-bottom-left-radius: 0px;
+-moz-border-radius-bottomright: 0px;
+-moz-border-radius-bottomleft: 0px;
+border-bottom-right-radius: 0px;
+border-bottom-left-radius: 0px;
+  outline: none;
+  -webkit-box-shadow: none;
+     -moz-box-shadow: none;
+          box-shadow: none;
+  -webkit-background-clip: padding-box;
+     -moz-background-clip: padding-box;
+          background-clip: padding-box;
+}
+
+.demi-modal.fade {
+  top: -25%;
+  -webkit-transition: opacity 0.3s linear, top 0.3s ease-out;
+     -moz-transition: opacity 0.3s linear, top 0.3s ease-out;
+       -o-transition: opacity 0.3s linear, top 0.3s ease-out;
+          transition: opacity 0.3s linear, top 0.3s ease-out;
+}
+
+.demi-modal.fade.in {
+  top: 0;
+}
+
+.demi-modal .modal-header {
+  padding: 9px 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.demi-modal .modal-header .close {
+  margin-top: 2px;
+}
+
+.demi-modal .modal-body {
+  position: relative;
+  max-height: 400px;
+  padding: 15px;
+  overflow-y: auto;
+}
+
+.demi-modal .modal-footer {
+  padding: 10px;
+}
+
+.control-group.error .input-prepend .add-on i, .control-group.error .input-append .add-on i {
+    color: #fff;
+}
+
+.app-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.brand img {
+  width: 60px;
+  height: 16px;
+}
+
+/*********************************************************
+ *
+ * Misc styles that can be reused as needed
+ * - from admin_collections.mako template
+ *
+ ********************************************************/
+.spinner {
+ color: #ddd;
+ font-size: 60px;
+}
+
+.pointer {
+ cursor: pointer;
+}
+
+.inline {
+  display: inline;
+}
+
+.actionbar-creation {
+  margin: 0;
+}
+
+.actionbar-actions {
+  margin: 0px 0px 10px 0px;
+}
+
+
+.jHueAutocomplete {
+   -webkit-border-radius: 0;
+      -moz-border-radius: 0;
+      border-radius: 0;
+
+  -webkit-box-shadow: none;
+     -moz-box-shadow: none;
+          box-shadow: none;
+  border-top: none;
+}
+
+.jHueAutocomplete .popover-content {
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.jHueAutocomplete .popover-content ul li {
+  cursor: pointer;
+  margin: 3px;
+  padding: 2px;
+}
+
+
+.jHueAutocomplete .popover-content ul li:hover, .jHueAutocomplete .popover-content ul li.active {
+  color: #FFFFFF;
+  background: #338BB8;
+}
+
+.fa-1halfx {
+  font-size: 1.5em;
 }

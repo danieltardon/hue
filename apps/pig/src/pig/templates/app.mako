@@ -29,7 +29,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
           <ul class="nav">
             <li class="currentApp">
               <a href="/${app_name}">
-                <img src="/pig/static/art/icon_pig_24.png" />
+                <img src="/pig/static/art/icon_pig_48.png" class="app-icon"/>
                 ${ _('Pig Editor') }
               </a>
             </li>
@@ -184,21 +184,21 @@ ${ commonheader(None, "pig", user) | n,unicode }
         </div>
         <div class="row-fluid">
           <div id="queryColumn" class="span9">
-            <a id="navigatorShow" href="#" title="${_('Show the function navigator')}" style="position:absolute;z-index: 10000; margin-top:10px;display:none;right:30px" rel="tooltip" data-placement="left"><i class="fa fa-compass"></i></a>
+            <a id="navigatorShow" href="#" title="${_('Show the assist')}" style="position:absolute;z-index: 10000; margin-top:10px;display:none;right:30px" rel="tooltip" data-placement="left"><i class="fa fa-compass"></i></a>
             <form id="queryForm">
               <textarea id="scriptEditor" data-bind="text:currentScript().script"></textarea>
             </form>
           </div>
           <div id="navigatorColumn" class="span3">
-            <a id="navigatorHide" href="#" title="${_('Hide the function navigator')}" rel="tooltip" data-placement="left" class="pull-right" style="margin:10px;margin-left: 0"><i class="fa fa-chevron-right"></i></a>
+            <a id="navigatorHide" href="#" title="${_('Hide the assist')}" rel="tooltip" data-placement="left" class="pull-right" style="margin:10px;margin-left: 0"><i class="fa fa-chevron-right"></i></a>
             <a href="#" title="${_('Double click on function to insert it in the editor')}" rel="tooltip" data-placement="left" class="pull-right" style="margin:10px;margin-left: 0"><i class="fa fa-question-circle"></i></a>
-            <h1 class="card-heading simple"><i class="fa fa-compass"></i> ${_('Navigator')}</h1>
+            <h1 class="card-heading simple"><i class="fa fa-compass"></i> ${_('Assist')}</h1>
             <div class="card-body">
               <p>
                 <input id="navigatorSearch" type="text" class="input-medium" placeholder="${ _('Function name...') }"/>
                 <ul id="navigatorFunctions" class="unstyled">
                   <li>
-                    <a class="navigatorFunctionCategory" href="javascript:void(0)">Eval Functions</a>
+                    <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Eval Functions</a>
                     <ul class="navigatorFunctionCategoryContent unstyled hide">
                       <li><a href="#">AVG(%VAR%)</a></li>
                       <li><a href="#">CONCAT(%VAR1%, %VAR2%)</a></li>
@@ -214,7 +214,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
                     </ul>
                   </li>
                   <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Relational Operators</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Relational Operators</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">COGROUP %VAR% BY %VAR%</a></li>
                         <li><a href="#">CROSS %VAR1%, %VAR2%;</a></li>
@@ -235,7 +235,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
                     </li>
 
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Input/Output</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Input/Output</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">LOAD '%FILE%';</a></li>
                         <li><a href="#">DUMP %VAR%;</a></li>
@@ -243,7 +243,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Debug</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Debug</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">EXPLAIN %VAR%;</a></li>
                         <li><a href="#">ILLUSTRATE %VAR%;</a></li>
@@ -251,13 +251,13 @@ ${ commonheader(None, "pig", user) | n,unicode }
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">HCatalog</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> HCatalog</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">LOAD '%TABLE%' USING org.apache.hcatalog.pig.HCatLoader();</a></li>
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Math</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Math</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">ABS(%VAR%)</a></li>
                         <li><a href="#">ACOS(%VAR%)</a></li>
@@ -281,7 +281,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Tuple, Bag, Map Functions</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Tuple, Bag, Map Functions</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">TOTUPLE(%VAR%)</a></li>
                         <li><a href="#">TOBAG(%VAR%)</a></li>
@@ -290,7 +290,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">String Functions</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> String Functions</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">INDEXOF(%STRING%, '%CHARACTER%', %STARTINDEX%)</a></li>
                         <li><a href="#">LAST_INDEX_OF(%STRING%, '%CHARACTER%', %STARTINDEX%)</a></li>
@@ -306,20 +306,20 @@ ${ commonheader(None, "pig", user) | n,unicode }
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Macros</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Macros</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">IMPORT '%PATH_TO_MACRO%';</a></li>
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">HBase</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> HBase</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li><a href="#">LOAD 'hbase://%TABLE%' USING org.apache.pig.backend.hadoop.hbase.HBaseStorage('%columnList%')</a></li>
                         <li><a href="#">STORE %VAR% INTO 'hbase://%TABLE%' USING org.apache.pig.backend.hadoop.hbase.HBaseStorage('%columnList%')</a></li>
                       </ul>
                     </li>
                     <li>
-                      <a class="navigatorFunctionCategory" href="javascript:void(0)">Python UDF</a>
+                      <a class="navigatorFunctionCategory" href="javascript:void(0)"><i class="fa fa-caret-right"></i> Python UDF</a>
                       <ul class="navigatorFunctionCategoryContent unstyled hide">
                         <li>
                           <a data-python="true" href="#">REGISTER 'python_udf.py' USING jython AS myfuncs;</a>
@@ -514,13 +514,13 @@ ${ commonheader(None, "pig", user) | n,unicode }
           </div>
           <div data-bind="template: {name: 'logTemplate', foreach: currentScript().actions}"></div>
           <script id="logTemplate" type="text/html">
-            <div data-bind="css:{'alert-modified': name != '', 'alert': name != '', 'alert-success': status == 'SUCCEEDED' || status == 'OK', 'alert-error': status != 'RUNNING' && status != 'SUCCEEDED' && status != 'OK' && status != 'PREP' && status != 'SUSPENDED'}">
+            <div data-bind="css:{'alert-modified': name != '', 'alert': name != '', 'alert-success': (status == 'SUCCEEDED' || status == 'OK') && isReallyDone, 'alert-error': status != 'RUNNING' && status != 'SUCCEEDED' && status != 'OK' && status != 'PREP' && status != 'SUSPENDED'}">
               <div class="pull-right">
                   ${ _('Status:') } <a data-bind="text: status, visible: absoluteUrl != '', attr: {'href': absoluteUrl}" target="_blank"/> <i class="fa fa-share"></i>
               </div>
               <h4>${ _('Progress:') } <span data-bind="text: progress"></span>${ _('%') }</h4>
               <div data-bind="css: {'progress': name != '', 'progress-striped': name != '', 'active': status == 'RUNNING'}" style="margin-top:10px">
-                <div data-bind="css: {'bar': name != '', 'bar-success': status == 'SUCCEEDED' || status == 'OK', 'bar-warning': status == 'RUNNING' || status == 'PREP', 'bar-danger': status != 'RUNNING' && status != 'SUCCEEDED' && status != 'OK' && status != 'PREP' && status != 'SUSPENDED'}, attr: {'style': 'width:' + progressPercent}"></div>
+                <div data-bind="css: {'bar': name != '', 'bar-success': (status == 'SUCCEEDED' || status == 'OK') && isReallyDone, 'bar-warning': status == 'RUNNING' || status == 'PREP' || !isReallyDone, 'bar-danger': status != 'RUNNING' && status != 'SUCCEEDED' && status != 'OK' && status != 'PREP' && status != 'SUSPENDED'}, attr: {'style': 'width:' + progressPercent}"></div>
               </div>
             </div>
           </script>
@@ -769,6 +769,7 @@ ${ commonheader(None, "pig", user) | n,unicode }
 
   var HIVE_AUTOCOMPLETE_BASE_URL = "${ autocomplete_base_url | n,unicode }";
   var HIVE_AUTOCOMPLETE_FAILS_SILENTLY_ON = [503]; // error codes from beeswax/views.py - autocomplete
+  var HIVE_AUTOCOMPLETE_USER = "${ user }";
 
   var codeMirror;
 
@@ -802,9 +803,17 @@ ${ commonheader(None, "pig", user) | n,unicode }
 
     $(".navigatorFunctionCategory").on("click", function () {
       var _submenu = $(this).next(".navigatorFunctionCategoryContent");
-      _submenu.find("li").removeClass("hide");
+      if (_submenu.hasClass("hide")){
+        $(this).find("i").removeClass("fa-caret-right").addClass("fa-caret-down");
+        _submenu.find("li").removeClass("hide");
+        _submenu.removeClass("hide");
+      }
+      else {
+        $(this).find("i").removeClass("fa-caret-down").addClass("fa-caret-right");
+        _submenu.find("li").addClass("hide");
+        _submenu.addClass("hide");
+      }
       $("#navigatorSearch").val("");
-      _submenu.removeClass("hide");
     });
 
     $(".navigatorFunctionCategoryContent li a").on("click", function (e) {
@@ -1105,20 +1114,10 @@ ${ commonheader(None, "pig", user) | n,unicode }
       $("#filter").val("");
     });
 
-    var logsRefreshInterval;
     $(document).on("startLogsRefresh", function () {
       logsAtEnd = true;
-      window.clearInterval(logsRefreshInterval);
       $("#withLogs").text("");
       refreshLogs();
-      logsRefreshInterval = window.setInterval(function () {
-        refreshLogs();
-      }, 500);
-    });
-
-    $(document).on("stopLogsRefresh", function () {
-      window.clearInterval(logsRefreshInterval);
-      $.jHueTitleUpdater.reset();
     });
 
     $(document).on("clearLogs", function () {
@@ -1201,22 +1200,26 @@ ${ commonheader(None, "pig", user) | n,unicode }
               }
             }, 100);
           }
-          if (data.workflow && data.workflow.isRunning) {
+          if ((data.workflow && data.workflow.isRunning) || !data.isReallyDone) {
             viewModel.currentScript().actions(data.workflow.actions);
             if (data.workflow.actions != null && data.workflow.actions.length > 0) {
               $.jHueTitleUpdater.set(data.workflow.actions[data.workflow.actions.length-1].progress + "%");
             }
+            else {
+              $.jHueTitleUpdater.reset();
+            }
+            window.setTimeout(function () {
+              refreshLogs();
+            }, 1000);
           }
           else {
             viewModel.currentScript().actions(data.workflow.actions);
             viewModel.currentScript().isRunning(false);
-            $(document).trigger("stopLogsRefresh");
             $.jHueTitleUpdater.reset();
           }
         });
       }
       else {
-        $(document).trigger("stopLogsRefresh");
         $.jHueTitleUpdater.reset();
       }
     }

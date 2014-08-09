@@ -15,22 +15,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import itertools
 import json
 import logging
+import numbers
 import re
 
 from django.db import models
+from django.utils.html import escape
 from django.utils.translation import ugettext as _, ugettext_lazy as _t
 from django.core.urlresolvers import reverse
 
-from search.api import SolrApi
+from desktop.lib.i18n import smart_unicode
+
+from libsolr.api import SolrApi
+
 from search.conf import SOLR_URL
 
 
 LOG = logging.getLogger(__name__)
 
 
+# Deprecated
 class Facet(models.Model):
   _ATTRIBUTES = ['properties', 'fields', 'ranges', 'dates', 'charts', 'order']
 
@@ -61,10 +67,6 @@ class Facet(models.Model):
       ('facet.limit', 100),
       ('facet.sort', properties.get('sort')),
     )
-
-    if data_dict.get('fields'):
-      field_facets = tuple([('facet.field', field_facet['field']) for field_facet in data_dict['fields']])
-      params += field_facets
 
     if data_dict.get('charts'):
       for field_facet in data_dict['charts']:
@@ -111,6 +113,7 @@ class Facet(models.Model):
     return params
 
 
+# Deprecated
 class Result(models.Model):
   _ATTRIBUTES = ['properties', 'template', 'highlighting', 'extracode']
 
@@ -162,6 +165,7 @@ class Result(models.Model):
     return params
 
 
+# Deprecated
 class Sorting(models.Model):
   _ATTRIBUTES = ['properties', 'fields']
 
@@ -201,67 +205,31 @@ class Sorting(models.Model):
 
 class CollectionManager(models.Manager):
 
-  def get_or_create(self, name, solr_properties, is_core_only=False, is_enabled=True, user=None):
-    try:
-      return self.get(name=name), False
-    except Collection.DoesNotExist:
-      facets = Facet.objects.create(data=json.dumps({
-                   'properties': {'isEnabled': False, 'limit': 10, 'mincount': 1, 'sort': 'count'},
-                   'ranges': [],
-                   'fields': [],
-                   'dates': []
-                }))
-      result = Result.objects.create(data=json.dumps({
-                  'template': '',
-                  'highlighting': [],
-                  'properties': {'highlighting_enabled': False},
-                  'extracode':
-                  """
-<style>
-em {
-  color: red;
-}
-</style>
+  def create2(self, name, label, is_core_only=False):
+    facets = Facet.objects.create()
+    result = Result.objects.create()
+    sorting = Sorting.objects.create()
 
-<script>
-</script>
-                  """
-              }))
-      sorting = Sorting.objects.create(data=json.dumps({'properties': {'is_enabled': False}, 'fields': []}))
-      cores = json.dumps(solr_properties)
+    collection = Collection.objects.create(
+        name=name,
+        label=label,
+        cores=json.dumps({'version': 2}),
+        is_core_only=is_core_only,
+        facets=facets,
+        result=result,
+        sorting=sorting
+    )
 
-      collection = Collection.objects.create(
-          name=name,
-          label=name,
-          enabled=is_enabled,
-          cores=cores,
-          is_core_only=is_core_only,
-          facets=facets,
-          result=result,
-          sorting=sorting
-      )
-
-      template = """
-<div class="row-fluid">
-  <div class="row-fluid">
-    <div class="span12">%s</div>
-  </div>
-  <br/>
-</div>""" % ' '.join(['{{%s}}' % field for field in collection.fields(user)])
-
-      result.update_from_post({'template': json.dumps(template)})
-      result.save()
-
-      return collection, True
+    return collection
 
 
 class Collection(models.Model):
-  # Perms coming with https://issues.cloudera.org/browse/HUE-950
+  """All the data is now saved into the properties field"""
   enabled = models.BooleanField(default=True)
   name = models.CharField(max_length=40, verbose_name=_t('Solr index name pointing to'))
   label = models.CharField(max_length=100, verbose_name=_t('Friendlier name in UI'))
   is_core_only = models.BooleanField(default=False)
-  cores = models.TextField(default=json.dumps({}), verbose_name=_t('Collection with cores data'), help_text=_t('Solr json'))
+  cores = models.TextField(default=json.dumps({}), verbose_name=_t('Collection with cores data'), help_text=_t('Solr json')) # Unused
   properties = models.TextField(
       default=json.dumps({}), verbose_name=_t('Properties'),
       help_text=_t('Hue properties (e.g. results by pages number)')
@@ -271,13 +239,89 @@ class Collection(models.Model):
   result = models.ForeignKey(Result)
   sorting = models.ForeignKey(Sorting)
 
+  _ATTRIBUTES = ['collection', 'layout', 'autocomplete']
+  ICON = '/search/static/art/icon_search_48.png'
+
   objects = CollectionManager()
 
-  def get_query(self, client_query=None):
-    return self.facets.get_query_params() + self.result.get_query_params() + self.sorting.get_query_params(client_query)
+  def get_c(self, user):
+    props = self.properties_dict
+
+    if 'collection' not in props:
+      props['collection'] = self.get_default(user)
+      if self.cores != '{}': # Convert collections from < Hue 3.6
+        try:
+          self._import_hue_3_5_collections(props, user)
+        except Exception, e:
+          LOG.error('Could not import collection: %s' % e)
+
+    if 'layout' not in props:
+      props['layout'] = []
+
+    if self.id:
+      props['collection']['id'] = self.id
+    if self.name:
+      props['collection']['name'] = self.name
+    if self.label:
+      props['collection']['label'] = self.label
+    if self.enabled is not None:
+      props['collection']['enabled'] = self.enabled
+
+    # tmp for dev
+    if 'rows' not in props['collection']['template']:
+      props['collection']['template']['rows'] = 10
+    if 'enabled' not in props['collection']:
+      props['collection']['enabled'] = True
+
+    return json.dumps(props)
+
+  def get_default(self, user):
+    fields = self.fields_data(user)
+    id_field = [field['name'] for field in fields if field.get('isId')]
+    if id_field:
+      id_field = id_field[0]
+
+    TEMPLATE = {
+      "extracode": escape("<style type=\"text/css\">\nem {\n  font-weight: bold;\n  background-color: yellow;\n}</style>\n\n<script>\n</script>"),
+      "highlighting": [""],
+      "properties": {"highlighting_enabled": True},
+      "template": """
+      <div class="row-fluid">
+        <div class="row-fluid">
+          <div class="span12">%s</div>
+        </div>
+        <br/>
+      </div>""" % ' '.join(['{{%s}}' % field['name'] for field in fields]),
+      "isGridLayout": True,
+      "showFieldList": True,
+      "fieldsAttributes": [self._make_gridlayout_header_field(field) for field in fields],
+      "fieldsSelected": [],
+      "rows": 10,
+    }
+
+    FACETS = []
+
+    return {
+      'id': self.id, 'name': self.name, 'label': self.label, 'enabled': self.enabled,
+      'template': TEMPLATE, 'facets': FACETS,
+      'fields': fields, 'idField': id_field,
+    }
+
+  @classmethod
+  def _make_field(cls, field, attributes):
+    return {
+        'name': str(field),
+        'type': str(attributes.get('type', '')),
+        'isId': attributes.get('required') and attributes.get('uniqueKey'),
+        'isDynamic': 'dynamicBase' in attributes
+    }
+
+  @classmethod
+  def _make_gridlayout_header_field(cls, field, isDynamic=False):
+    return {'name': field['name'], 'sort': {'direction': None}, 'isDynamic': isDynamic}
 
   def get_absolute_url(self):
-    return reverse('search:admin_collection', kwargs={'collection_id': self.id})
+    return reverse('search:index') + '?collection=%s' % self.id
 
   def fields(self, user):
     return sorted([str(field.get('name', '')) for field in self.fields_data(user)])
@@ -286,24 +330,31 @@ class Collection(models.Model):
     schema_fields = SolrApi(SOLR_URL.get(), user).fields(self.name)
     schema_fields = schema_fields['schema']['fields']
 
-    dynamic_fields = []
-#    dynamic_fields = SolrApi(SOLR_URL.get(), user).fields(self.name, dynamic=True)
-#    dynamic_fields = dynamic_fields['fields']
-
-    schema_fields.update(dynamic_fields)
-
-    return sorted([{'name': str(field), 'type': str(attributes.get('type', ''))}
-                  for field, attributes in schema_fields.iteritems()])
+    return sorted([self._make_field(field, attributes) for field, attributes in schema_fields.iteritems()])
 
   @property
   def properties_dict(self):
     if not self.properties:
       self.data = json.dumps({})
     properties_python = json.loads(self.properties)
-    # Backward compatibility
+
+    # Backward compatibility conversions
     if 'autocomplete' not in properties_python:
       properties_python['autocomplete'] = False
+    if 'collection' in properties_python:
+      if 'showFieldList' not in properties_python['collection']['template']:
+        properties_python['collection']['template']['showFieldList'] = True
+
     return properties_python
+
+  def update_properties(self, post_data):
+    prop_dict = self.properties_dict
+
+    for attr in Collection._ATTRIBUTES:
+      if post_data.get(attr) is not None:
+        prop_dict[attr] = post_data[attr]
+
+    self.properties = json.dumps(prop_dict)
 
   @property
   def autocomplete(self):
@@ -318,149 +369,180 @@ class Collection(models.Model):
   @property
   def icon(self):
     if self.name == 'twitter_demo':
-      return '/search/static/art/icon_twitter.png'
+      return '/search/static/art/icon_twitter_48.png'
     elif self.name == 'yelp_demo':
-          return '/search/static/art/icon_yelp.png'
-    elif self.name == 'log_demo':
-          return '/search/static/art/icon_logs.png'
+      return '/search/static/art/icon_yelp_48.png'
+    elif self.name == 'log_analytics_demo':
+      return '/search/static/art/icon_logs_48.png'
     else:
-          return '/search/static/art/icon_search_24.png'
+      return '/search/static/art/icon_search_48.png'
+
+  def _import_hue_3_5_collections(self, props, user):
+    props['collection']['template']['template'] = self.result.get_template()
+    props['collection']['template']['extracode'] = escape(self.result.get_extracode())
+    props['collection']['template']['isGridLayout'] = False
+    props['layout'] = [
+          {"size":2,"rows":[{"widgets":[]}],"drops":["temp"],"klass":"card card-home card-column span2"},
+          {"size":10,"rows":[{"widgets":[
+              {"size":12,"name":"Grid Results","id":"52f07188-f30f-1296-2450-f77e02e1a5c0","widgetType":"html-resultset-widget",
+               "properties":{},"offset":0,"isLoading":True,"klass":"card card-widget span12"}]
+          }], "drops":["temp"],"klass":"card card-home card-column span10"}
+     ]
+
+    from search.views import _create_facet
+
+    props['collection']['facets'] =[]
+    facets = self.facets.get_data()
+
+    for facet_id in facets['order']:
+      for facet in facets['fields'] + facets['ranges']:
+        if facet['uuid'] == facet_id:
+          props['collection']['facets'].append(
+              _create_facet({'name': self.name}, user, facet_id, facet['label'], facet['field'], 'facet-widget'))
+          props['layout'][0]['rows'][0]['widgets'].append({
+              "size":12,"name": facet['label'], "id":facet_id, "widgetType": "facet-widget",
+              "properties":{},"offset":0,"isLoading":True,"klass":"card card-widget span12"
+          })
 
 
-def get_facet_field_format(field, type, facets):
-  format = ""
-  try:
-    if type == 'field':
-      for fld in facets['fields']:
-        if fld['field'] == field:
-          format = fld['format']
-    elif type == 'range':
-      for fld in facets['ranges']:
-        if fld['field'] == field:
-          format = fld['format']
-    elif type == 'date':
-      for fld in facets['dates']:
-        if fld['field'] == field:
-          format = fld['format']
-  except:
-    pass
-  return format
+def get_facet_field(category, field, facets):
+  facets = filter(lambda facet: facet['type'] == category and facet['field'] == field, facets)
+  if facets:
+    return facets[0]
+  else:
+    return None
 
-def get_facet_field_label(field, type, facets):
-  label = field
-  if type == 'field':
-    for fld in facets['fields']:
-      if fld['field'] == field:
-        label = fld['label']
-  elif type == 'range':
-    for fld in facets['ranges']:
-      if fld['field'] == field:
-        label = fld['label']
-  elif type == 'date':
-    for fld in facets['dates']:
-      if fld['field'] == field:
-        label = fld['label']
-  elif type == 'chart':
-    for fld in facets['charts']:
-      if fld['field'] == field:
-        label = fld['label']
-  return label
+def pairwise2(cat, selected_values, iterable):
+  pairs = []
+  a, b = itertools.tee(iterable)
+  for element in a:
+    pairs.append({'cat': cat, 'value': element, 'count': next(a), 'selected': element in selected_values})
+  return pairs
 
-def get_facet_field_uuid(field, type, facets):
-  uuid = ''
-  if type == 'field':
-    for fld in facets['fields']:
-      if fld['field'] == field:
-        uuid = fld['uuid']
-  elif type == 'range':
-    for fld in facets['ranges']:
-      if fld['field'] == field:
-        uuid = fld['uuid']
-  elif type == 'date':
-    for fld in facets['dates']:
-      if fld['field'] == field:
-        uuid = fld['uuid']
-  return uuid
-
-def is_chart_field(field, charts):
-  found = False
-  for fld in charts:
-    if field == fld['field']:
-      found = True
-  return found
+def range_pair(cat, selected_values, iterable, end):
+  # e.g. counts":["0",17430,"1000",1949,"2000",671,"3000",404,"4000",243,"5000",165],"gap":1000,"start":0,"end":6000}
+  pairs = []
+  a, to = itertools.tee(iterable)
+  next(to, None)
+  for element in a:
+    next(to, None)
+    to_value = next(to, end)
+    pairs.append({'field': cat, 'from': element, 'value': next(a), 'to': to_value, 'selected': element in selected_values})
+  return pairs
 
 
-def augment_solr_response(response, facets):
+def augment_solr_response(response, collection, query):
   augmented = response
   augmented['normalized_facets'] = []
 
-  normalized_facets = {}
-  default_facets = []
+  normalized_facets = []
 
-  chart_facets = facets.get('charts', [])
+  selected_values = dict([((fq['id'], fq['field'], fq['type']), fq['filter']) for fq in query['fqs']])
 
   if response and response.get('facet_counts'):
-    if response['facet_counts']['facet_fields']:
-      for cat in response['facet_counts']['facet_fields']:
+    # e.g. [{u'field': u'sun', u'type': u'query', u'id': u'67b43a63-ed22-747b-47e8-b31aad1431ea', u'label': u'sun'}
+    for facet in collection['facets']:
+      category = facet['type']
+
+      if category == 'field' and response['facet_counts']['facet_fields']:
+        name = facet['field']
+        collection_facet = get_facet_field(category, name, collection['facets'])
+        counts = pairwise2(name, selected_values.get((facet['id'], name, category), []), response['facet_counts']['facet_fields'][name])
+        if collection_facet['properties']['sort'] == 'asc':
+          counts.reverse()
         facet = {
-          'field': cat,
-          'type': 'chart' if is_chart_field(cat, chart_facets) else 'field',
-          'label': get_facet_field_label(cat, is_chart_field(cat, chart_facets) and 'chart' or 'field', facets),
-          'counts': response['facet_counts']['facet_fields'][cat],
+          'id': collection_facet['id'],
+          'field': name,
+          'type': category,
+          'label': collection_facet['label'],
+          'counts': counts,
+          # add total result count?
         }
-        uuid = get_facet_field_uuid(cat, 'field', facets)
-        if uuid == '':
-          default_facets.append(facet)
-        else:
-          normalized_facets[uuid] = facet
-
-    if response['facet_counts']['facet_ranges']:
-      for cat in response['facet_counts']['facet_ranges']:
+        normalized_facets.append(facet)
+      elif category == 'range' and response['facet_counts']['facet_ranges']:
+        name = facet['field']
+        collection_facet = get_facet_field(category, name, collection['facets'])
+        counts = response['facet_counts']['facet_ranges'][name]['counts']
+        end = response['facet_counts']['facet_ranges'][name]['end']
+        counts = range_pair(name, selected_values.get((facet['id'], name, 'range'), []), counts, end)
+        if collection_facet['properties']['sort'] == 'asc':
+          counts.reverse()
         facet = {
-          'field': cat,
-          'type': 'chart' if is_chart_field(cat, chart_facets) else 'range',
-          'label': get_facet_field_label(cat, 'range', facets),
-          'counts': response['facet_counts']['facet_ranges'][cat]['counts'],
-          'start': response['facet_counts']['facet_ranges'][cat]['start'],
-          'end': response['facet_counts']['facet_ranges'][cat]['end'],
-          'gap': response['facet_counts']['facet_ranges'][cat]['gap'],
+          'id': collection_facet['id'],
+          'field': name,
+          'type': category,
+          'label': collection_facet['label'],
+          'counts': counts,
+          'extraSeries': []
         }
-        uuid = get_facet_field_uuid(cat, 'range', facets)
-        if uuid == '':
-          default_facets.append(facet)
-        else:
-          normalized_facets[uuid] = facet
+        normalized_facets.append(facet)
+      elif category == 'query' and response['facet_counts']['facet_queries']:
+        for name, value in response['facet_counts']['facet_queries'].iteritems():
+          collection_facet = get_facet_field(category, name, collection['facets'])
+          facet = {
+            'id': collection_facet['id'],
+            'query': name,
+            'type': category,
+            'label': name,
+            'count': value,
+          }
+          normalized_facets.append(facet)
+      # pivot_facet
 
-    if response['facet_counts']['facet_dates']:
-      for cat in response['facet_counts']['facet_dates']:
-        facet = {
-          'field': cat,
-          'type': 'date',
-          'label': get_facet_field_label(cat, 'date', facets),
-          'format': get_facet_field_format(cat, 'date', facets),
-          'start': response['facet_counts']['facet_dates'][cat]['start'],
-          'end': response['facet_counts']['facet_dates'][cat]['end'],
-          'gap': response['facet_counts']['facet_dates'][cat]['gap'],
-        }
-        counts = []
-        for date, count in response['facet_counts']['facet_dates'][cat].iteritems():
-          if date not in ('start', 'end', 'gap'):
-            counts.append(date)
-            counts.append(count)
-        facet['counts'] = counts
+  # HTML escaping
+  for doc in response['response']['docs']:
+    for field, value in doc.iteritems():
+      if isinstance(value, numbers.Number):
+        escaped_value = value
+      else:
+        value = smart_unicode(value, errors='replace')
+        escaped_value = escape(value)
+      doc[field] = escaped_value
+    doc['showDetails'] = False
+    doc['details'] = []
 
-        uuid = get_facet_field_uuid(cat, 'date', facets)
-        if uuid == '':
-          default_facets.append(facet)
-        else:
-          normalized_facets[uuid] = facet
+  highlighted_fields = response.get('highlighting', {}).keys()
+  if highlighted_fields and not query.get('download'):
+    id_field = collection.get('idField')
+    if id_field:
+      for doc in response['response']['docs']:
+        if id_field in doc and doc[id_field] in highlighted_fields:
+          doc.update(response['highlighting'][doc[id_field]])
+    else:
+      response['warning'] = _("The Solr schema requires an id field for performing the result highlighting")
 
-  for ordered_uuid in facets.get('order', []):
-    try:
-      augmented['normalized_facets'].append(normalized_facets[ordered_uuid])
-    except:
-      pass
-  if default_facets:
-    augmented['normalized_facets'].extend(default_facets)
+
+  if normalized_facets:
+    augmented['normalized_facets'].extend(normalized_facets)
 
   return augmented
+
+def augment_solr_exception(response, collection):
+  response.update(
+  {
+    "facet_counts": {
+    },
+    "highlighting": {
+    },
+    "normalized_facets": [
+      {
+        "field": facet['field'],
+        "counts": [],
+        "type": facet['type'],
+        "label": facet['label']
+      }
+      for facet in collection['facets']
+    ],
+    "responseHeader": {
+      "status": -1,
+      "QTime": 0,
+      "params": {
+      }
+    },
+    "response": {
+      "start": 0,
+      "numFound": 0,
+      "docs": [
+      ]
+    }
+  })
